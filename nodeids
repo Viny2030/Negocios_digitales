@@ -1,0 +1,7 @@
+[
+  "tests/test_case1.py::test_recommend_next_touchpoint",
+  "tests/test_case1.py::test_requires_api_key",
+  "tests/test_case2.py::test_get_price_respects_min_margin",
+  "tests/test_case3.py::test_alert_webhook_returns_decision",
+  "tests/test_datasets.py::test_upload_and_list_dataset"
+]
