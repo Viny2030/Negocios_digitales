@@ -1,9 +1,11 @@
-"""Lógica de negocio del Caso 1.1: resuelve el modelo de la empresa y arma la respuesta."""
+"""Lógica de negocio del Caso 1.1: resuelve el modelo de la empresa, aplica las
+restricciones de cadencia/presupuesto y arma la respuesta."""
 import os
 
 from app.core.config import get_settings
+from app.cases.case1_messaging.constraints import apply_frequency_and_budget_filter
 from app.cases.case1_messaging.policy import MessagingPolicy
-from app.cases.case1_messaging.schemas import ProspectProfile, RecommendationResponse
+from app.cases.case1_messaging.schemas import ChannelBudget, ProspectProfile, RecommendationResponse
 
 settings = get_settings()
 
@@ -17,14 +19,26 @@ def _get_policy_for_company(company_id: int) -> MessagingPolicy:
     return _policy_cache[company_id]
 
 
-def recommend_next_touchpoint(company_id: int, profile: ProspectProfile) -> RecommendationResponse:
+def recommend_next_touchpoint(
+    company_id: int,
+    profile: ProspectProfile,
+    channel_budget: ChannelBudget | None = None,
+) -> RecommendationResponse:
     policy = _get_policy_for_company(company_id)
     action, value, rationale = policy.predict(profile)
+
+    final_action, constraints_applied = apply_frequency_and_budget_filter(
+        action, profile, channel_budget or ChannelBudget(),
+    )
+    if final_action != action:
+        rationale += f" Ajustado de '{action.value}' a '{final_action.value}' por restricciones de negocio."
+
     return RecommendationResponse(
         prospect_id=profile.prospect_id,
-        recommended_action=action,
+        recommended_action=final_action,
         expected_value=value,
         rationale=rationale,
+        constraints_applied=constraints_applied,
     )
 
 

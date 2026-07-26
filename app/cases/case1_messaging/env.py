@@ -14,6 +14,7 @@ except ImportError:  # gymnasium es opcional hasta que se entrene de verdad
     gym = None
     spaces = None
 
+from app.cases.case1_messaging.encoding import STATE_DIM, row_to_vector
 from app.cases.case1_messaging.schemas import Touchpoint
 
 ACTIONS = list(Touchpoint)
@@ -35,15 +36,19 @@ class MessagingSequencingEnv(gym.Env if gym else object):
         self.max_steps = max_steps
         self.action_space = spaces.Discrete(len(ACTIONS))
         # 7 canales + 2 contadores + 1 recencia + 3 etapas + 1 flag unsubscribed = 14
-        self.observation_space = spaces.Box(low=0.0, high=1.0, shape=(14,), dtype=np.float32)
+        self.observation_space = spaces.Box(low=0.0, high=1.0, shape=(STATE_DIM,), dtype=np.float32)
         self._step_count = 0
         self._state = None
 
     def _sample_prospect(self) -> np.ndarray:
+        """Calibra el estado inicial/siguiente con un prospecto real del dataset de la
+        empresa cuando hay historical_df disponible (mismo mapeo columna->vector que
+        usa policy.py en inferencia, ver encoding.py). Si no hay dataset todavía, usa
+        un vector de ceros para poder entrenar/probar el entorno igual."""
         if self.historical_df is not None and len(self.historical_df) > 0:
             row = self.historical_df.sample(1).iloc[0]
-            # TODO: mapear columnas reales del CRM del cliente a este vector de estado
-        return np.zeros(14, dtype=np.float32)
+            return row_to_vector(row)
+        return np.zeros(STATE_DIM, dtype=np.float32)
 
     def reset(self, *, seed=None, options=None):
         super().reset(seed=seed)

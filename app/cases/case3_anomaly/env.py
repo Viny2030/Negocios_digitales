@@ -11,6 +11,7 @@ except ImportError:
     gym = None
     spaces = None
 
+from app.cases.case3_anomaly.encoding import STATE_DIM, row_to_vector
 from app.cases.case3_anomaly.schemas import TriageAction
 
 ACTIONS = list(TriageAction)
@@ -32,15 +33,20 @@ class AnomalyTriageEnv(gym.Env if gym else object):
         self.historical_df = historical_df
         self.max_steps = max_steps
         self.action_space = spaces.Discrete(len(ACTIONS))
-        self.observation_space = spaces.Box(low=0.0, high=1.0, shape=(6,), dtype=np.float32)
+        self.observation_space = spaces.Box(low=0.0, high=1.0, shape=(STATE_DIM,), dtype=np.float32)
         self._step_count = 0
         self._state = None
 
     def _sample_alert(self) -> np.ndarray:
+        """Calibra el estado con una alerta real del dataset (NAB / Yahoo Anomaly
+        Dataset / tickets propios); mismo mapeo columna->vector que policy.py en
+        inferencia (ver encoding.py). La capacidad del equipo se simula porque no es
+        un atributo de la alerta histórica. Sin dataset todavía, cae a un estado
+        aleatorio para poder entrenar/probar el entorno igual."""
         if self.historical_df is not None and len(self.historical_df) > 0:
             row = self.historical_df.sample(1).iloc[0]
-            # TODO: mapear columnas reales del dataset (NAB / tickets internos) a este vector
-        return np.random.uniform(0, 1, size=6).astype(np.float32)
+            return row_to_vector(row)
+        return np.random.uniform(0, 1, size=STATE_DIM).astype(np.float32)
 
     def reset(self, *, seed=None, options=None):
         super().reset(seed=seed)

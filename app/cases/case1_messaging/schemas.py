@@ -34,9 +34,33 @@ class ProspectProfile(BaseModel):
     purchase_stage: str = "awareness"  # awareness | consideration | decision
     unsubscribed: bool = False
 
+    # --- Campos usados por el filtro de restricciones (constraints.py) ---
+    days_since_last_email: float | None = Field(
+        default=None,
+        description="Días desde el último email enviado (cualquier variante A/B/C). "
+        "None si nunca se le envió un email a este prospecto.",
+    )
+    contacts_this_week: dict[str, int] = Field(
+        default_factory=dict,
+        description="Contactos ya realizados esta semana por bucket de canal "
+        "(email/sms/push/call/retargeting_meta), para aplicar el presupuesto semanal.",
+    )
+
+
+class ChannelBudget(BaseModel):
+    """Presupuesto semanal por canal para un prospecto (tope de contactos permitidos).
+    Default de negocio: 1 email por semana, cualquier variante A/B/C."""
+
+    email: int = Field(default=1, ge=0)
+    sms: int = Field(default=2, ge=0)
+    push: int = Field(default=3, ge=0)
+    call: int = Field(default=1, ge=0)
+    retargeting_meta: int = Field(default=5, ge=0)
+
 
 class RecommendationRequest(BaseModel):
     prospect: ProspectProfile
+    channel_budget: ChannelBudget = Field(default_factory=ChannelBudget)
 
 
 class RecommendationResponse(BaseModel):
@@ -44,6 +68,7 @@ class RecommendationResponse(BaseModel):
     recommended_action: Touchpoint
     expected_value: float
     rationale: str
+    constraints_applied: list[str] = Field(default_factory=list)
 
 
 class TrainRequest(BaseModel):

@@ -12,6 +12,8 @@ except ImportError:
     gym = None
     spaces = None
 
+from app.cases.case2_pricing.encoding import STATE_DIM, row_to_vector
+
 
 class PricingEnv(gym.Env if gym else object):
     """
@@ -33,17 +35,20 @@ class PricingEnv(gym.Env if gym else object):
         self.max_steps = max_steps
 
         self.action_space = spaces.Box(low=min_multiplier, high=max_multiplier, shape=(1,), dtype=np.float32)
-        self.observation_space = spaces.Box(low=0.0, high=1.0, shape=(6,), dtype=np.float32)
+        self.observation_space = spaces.Box(low=0.0, high=1.0, shape=(STATE_DIM,), dtype=np.float32)
         self._step_count = 0
         self._state = None
         # Registro de tasas de rechazo por segmento para medir Demographic Parity
         self._rejection_by_segment: dict[str, list[int]] = {}
 
     def _sample_state(self) -> np.ndarray:
+        """Calibra el estado con una transacción real del dataset de la empresa (mismo
+        mapeo columna->vector que usa policy.py en inferencia, ver encoding.py). Sin
+        dataset todavía, cae a un estado aleatorio para poder entrenar/probar igual."""
         if self.historical_df is not None and len(self.historical_df) > 0:
             row = self.historical_df.sample(1).iloc[0]
-            # TODO: mapear columnas reales (inventario, costo, segmento, competencia) del cliente
-        return np.random.uniform(0, 1, size=6).astype(np.float32)
+            return row_to_vector(row)
+        return np.random.uniform(0, 1, size=STATE_DIM).astype(np.float32)
 
     def reset(self, *, seed=None, options=None):
         super().reset(seed=seed)

@@ -16,8 +16,9 @@ def recommend_next_touchpoint_endpoint(
     payload: RecommendationRequest,
     company: Company = Depends(get_current_company),
 ):
-    """Dado el perfil de interacción de un prospecto, devuelve el próximo touchpoint óptimo."""
-    return recommend_next_touchpoint(company.id, payload.prospect)
+    """Dado el perfil de interacción de un prospecto, devuelve el próximo touchpoint óptimo
+    ya filtrado por las restricciones de cadencia (1 email/semana) y presupuesto por canal."""
+    return recommend_next_touchpoint(company.id, payload.prospect, payload.channel_budget)
 
 
 @router.post("/train", status_code=202)

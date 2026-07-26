@@ -6,8 +6,7 @@ el endpoint funcione desde el día 1 (útil para demo y para integraciones tempr
 """
 import os
 
-import numpy as np
-
+from app.cases.case1_messaging.encoding import profile_to_vector
 from app.cases.case1_messaging.schemas import ProspectProfile, Touchpoint
 
 try:
@@ -22,20 +21,6 @@ class MessagingPolicy:
         if model_path and os.path.exists(model_path) and DQN is not None:
             loader = PPO if "ppo" in model_path.lower() else DQN
             self.model = loader.load(model_path)
-
-    @staticmethod
-    def _profile_to_vector(profile: ProspectProfile) -> np.ndarray:
-        """Debe reflejar exactamente el mismo esquema de estado usado en env.py."""
-        channels = ["email_a", "email_b", "email_c", "retargeting_meta", "sms", "push", "call"]
-        onehot_channels = [1.0 if c in profile.channels_contacted else 0.0 for c in channels]
-        stages = ["awareness", "consideration", "decision"]
-        onehot_stage = [1.0 if profile.purchase_stage == s else 0.0 for s in stages]
-        vector = onehot_channels + [
-            min(profile.messages_received / 10.0, 1.0),
-            min(profile.responses_count / 5.0, 1.0),
-            min(profile.days_since_last_contact / 30.0, 1.0),
-        ] + onehot_stage + [1.0 if profile.unsubscribed else 0.0]
-        return np.array(vector, dtype=np.float32)
 
     def _heuristic(self, profile: ProspectProfile) -> tuple[Touchpoint, float, str]:
         """Regla de respaldo, simple pero razonable, mientras no hay modelo RL entrenado."""
@@ -53,7 +38,7 @@ class MessagingPolicy:
         if self.model is None:
             return self._heuristic(profile)
 
-        obs = self._profile_to_vector(profile)
+        obs = profile_to_vector(profile)
         action_idx, _ = self.model.predict(obs, deterministic=True)
         action = list(Touchpoint)[int(action_idx)]
         # value_estimate real requeriría acceder a la red de valor del modelo;
