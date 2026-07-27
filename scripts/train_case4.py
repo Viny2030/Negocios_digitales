@@ -16,9 +16,9 @@ import pandas as pd
 from sqlalchemy.orm import Session
 
 from app.cases.case4_accelerator.env import AcceleratorEnv
-from app.core import model_registry
-from app.core.config import get_settings
-from app.core.database import SessionLocal
+import model_registry
+from config import get_settings
+from database import SessionLocal
 from app.models.dataset import Dataset
 
 settings = get_settings()

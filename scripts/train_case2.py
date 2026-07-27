@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.cases.case2_pricing.env import PricingEnv
 from app.cases.case2_pricing.fairness import evaluate_fairness
-from app.core import model_registry
+import model_registry
 from app.core.config import get_settings
 from app.core.database import SessionLocal
 from app.models.dataset import Dataset

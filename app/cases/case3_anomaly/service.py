@@ -1,6 +1,6 @@
 """Lógica de negocio del Caso 3.3: clasifica falso positivo, decide la acción y (opcionalmente)
 crea el ticket priorizado en la herramienta de gestión de la empresa (Jira/Opsgenie/Zendesk)."""
-from app.core import model_registry
+import model_registry
 from app.core.config import get_settings
 from app.cases.case3_anomaly.classifier import FalsePositiveClassifier
 from app.cases.case3_anomaly.policy import AnomalyTriagePolicy

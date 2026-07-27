@@ -1,7 +1,7 @@
 """Lógica de negocio del Caso 2.1: infiere el precio RL y aplica el filtro de factibilidad."""
 import time
 
-from app.core import model_registry
+import model_registry
 from app.core.config import get_settings
 from app.cases.case2_pricing.constraints import apply_feasibility_filter
 from app.cases.case2_pricing.policy import PricingPolicy
