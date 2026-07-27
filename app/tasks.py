@@ -8,7 +8,7 @@ ningún caché acá: los `service.py` de cada caso detectan la nueva versión pr
 comparando el version_id vigente en cada request (ver `model_registry.get_current_version_id`),
 lo cual funciona incluso corriendo el worker en un proceso/contenedor separado del de la API.
 """
-from app.core.celery_app import celery_app
+from celery_app import celery_app
 
 
 @celery_app.task(name="train_case1", bind=True, max_retries=1)

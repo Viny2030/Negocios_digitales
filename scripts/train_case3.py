@@ -17,9 +17,9 @@ from sklearn.model_selection import train_test_split
 from sqlalchemy.orm import Session
 
 from app.cases.case3_anomaly.env import AnomalyTriageEnv
-from app.core import model_registry
-from app.core.config import get_settings
-from app.core.database import SessionLocal
+import model_registry
+from config import get_settings
+from database import SessionLocal
 from app.models.dataset import Dataset
 
 settings = get_settings()

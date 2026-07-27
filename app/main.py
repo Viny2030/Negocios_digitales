@@ -8,8 +8,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.router import api_router
-from app.core.config import get_settings
-from app.core.database import init_db
+from config import get_settings
+from database import init_db
 
 settings = get_settings()
 

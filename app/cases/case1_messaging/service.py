@@ -1,7 +1,7 @@
 """Lógica de negocio del Caso 1.1: resuelve el modelo de la empresa, aplica las
 restricciones de cadencia/presupuesto y arma la respuesta."""
 import model_registry
-from app.core.config import get_settings
+from config import get_settings
 from app.cases.case1_messaging.constraints import apply_frequency_and_budget_filter
 from app.cases.case1_messaging.policy import MessagingPolicy
 from app.cases.case1_messaging.schemas import ChannelBudget, ProspectProfile, RecommendationResponse

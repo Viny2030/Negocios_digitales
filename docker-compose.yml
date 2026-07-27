@@ -18,7 +18,7 @@ services:
 
   worker:
     build: .
-    command: celery -A app.core.celery_app worker --loglevel=info
+    command: celery -A celery_app worker --loglevel=info
     environment:
       - DATABASE_URL=postgresql://prescriptive:prescriptive@db:5432/prescriptive
       - DATASETS_DIR=/app/storage/datasets

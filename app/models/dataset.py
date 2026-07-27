@@ -6,7 +6,7 @@ import enum
 from sqlalchemy import Column, DateTime, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 
-from app.core.database import Base
+from database import Base
 
 
 class CaseType(str, enum.Enum):

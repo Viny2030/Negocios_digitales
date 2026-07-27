@@ -1,7 +1,7 @@
 """Lógica de negocio del Caso 6.2: estima el valor esperado de cada startup del
 portfolio y resuelve la asignación de recursos del período vía LP."""
 import model_registry
-from app.core.config import get_settings
+from config import get_settings
 from app.cases.case4_accelerator.constraints import apply_portfolio_allocation
 from app.cases.case4_accelerator.policy import AcceleratorPolicy
 from app.cases.case4_accelerator.schemas import AllocationRequest, AllocationResponse

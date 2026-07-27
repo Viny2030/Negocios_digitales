@@ -2,7 +2,7 @@
 import time
 
 import model_registry
-from app.core.config import get_settings
+from config import get_settings
 from app.cases.case2_pricing.constraints import apply_feasibility_filter
 from app.cases.case2_pricing.policy import PricingPolicy
 from app.cases.case2_pricing.schemas import PriceRequest, PriceResponse

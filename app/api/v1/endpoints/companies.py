@@ -2,8 +2,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.core.database import get_db
-from app.core.security import generate_api_key, get_current_company
+from database import get_db
+from security import generate_api_key, get_current_company
 from app.models.company import Company
 from app.schemas.common import CompanyCreate, CompanyOut
 

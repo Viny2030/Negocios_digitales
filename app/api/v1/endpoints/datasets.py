@@ -13,9 +13,9 @@ import pandas as pd
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
-from app.core.config import get_settings
-from app.core.database import get_db
-from app.core.security import get_current_company
+from config import get_settings
+from database import get_db
+from security import get_current_company
 from app.models.company import Company
 from app.models.dataset import CaseType, Dataset, DatasetStatus
 from app.schemas.common import DatasetOut
