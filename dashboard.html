@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Panel de Pruebas - Algoritmos Prescriptivos</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css">
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  pre { white-space: pre-wrap; word-break: break-word; }
+  textarea { font-family: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace; font-size: 12.5px; }
+  .tab-btn { border-bottom: 3px solid transparent; color: #6b7280; transition: all .15s; }
+  .tab-btn.active { font-weight: 700; }
+  .subtab-btn.active { font-weight: 600; }
+  .spinner { border: 3px solid #e5e7eb; border-top: 3px solid #4f46e5; border-radius: 50%; width: 18px; height: 18px; animation: spin 0.7s linear infinite; display: inline-block; }
+  @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+</style>
+</head>
+<body class="bg-gray-100 text-gray-800 min-h-screen">
+
+<div class="max-w-6xl mx-auto p-4">
+
+  <div class="bg-white rounded-lg shadow p-4 mb-4">
+    <div class="flex items-center justify-between flex-wrap gap-2">
+      <div>
+        <h1 class="text-xl font-bold text-gray-900">Panel de Pruebas — Algoritmos Prescriptivos</h1>
+        <p class="text-sm text-gray-500">Datasets, entrenamiento e inferencia contra <code id="baseUrlLabel"></code> (se auto-configura leyendo <code>/openapi.json</code>).</p>
+      </div>
+      <div id="healthDot" class="flex items-center gap-2 text-sm">
+        <span class="w-3 h-3 rounded-full bg-gray-300 inline-block" id="healthCircle"></span>
+        <span id="healthText" class="text-gray-500">sin verificar</span>
+      </div>
+    </div>
+
+    <div class="mt-3 border rounded-lg">
+      <button onclick="toggleHelp()" class="w-full text-left px-3 py-2 text-sm font-semibold text-gray-700 flex items-center justify-between">
+        <span>¿Cómo usar este panel? (guía rápida para quien no conoce el proyecto)</span>
+        <span id="helpArrow">▸</span>
+      </button>
+      <div id="helpBody" class="hidden px-4 pb-3 text-sm text-gray-600 space-y-2 border-t pt-2">
+        <p>Esta plataforma tiene <strong>4 modelos de IA (Reinforcement Learning)</strong>, uno por caso de negocio. Cada empresa cliente tiene su propia API key y sus propios modelos entrenados — la key identifica a qué empresa pertenecen los datos y las recomendaciones.</p>
+        <p><strong>Pasos:</strong> 1) Pedí tu API key al equipo (identifica tu empresa). 2) Pegala arriba y tocá "Conectar y cargar API" — esto lee la documentación técnica de la API y arma los formularios automáticamente. 3) Elegí la pestaña del caso que querés probar. 4) Dentro de esa pestaña: <em>Datasets</em> para subir tus datos históricos, <em>Entrenar</em> para generar un modelo con esos datos, y <em>Probar inferencia</em> para pedirle una recomendación al modelo ya entrenado con datos de ejemplo (editá el JSON con datos reales de tu negocio).</p>
+        <p><strong>Cómo leer una respuesta:</strong> <code>rationale</code> explica en lenguaje simple por qué el modelo recomendó eso. <code>constraints_applied</code> muestra qué reglas de negocio (límites, políticas) ajustaron la sugerencia cruda del modelo. Campos como <code>expected_value</code>, <code>priority_score</code> o <code>false_positive_probability</code> son puntajes de confianza del modelo — sirven para priorizar, no son una garantía absoluta.</p>
+      </div>
+    </div>
+
+    <div class="mt-4">
+      <label class="text-xs font-semibold text-gray-500">X-API-Key (company)</label>
+      <input id="apiKey" type="text" placeholder="pk_..." class="w-full border rounded px-2 py-1.5 text-sm">
+    </div>
+    <div class="flex gap-2 mt-3">
+      <button onclick="init()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-1.5 rounded">Conectar y cargar API</button>
+      <button onclick="checkHealth()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm font-medium px-4 py-1.5 rounded">Probar /health</button>
+      <span id="loadStatus" class="text-sm text-gray-500 self-center"></span>
+    </div>
+  </div>
+
+  <div id="tabPanel" class="rounded-lg shadow transition-colors duration-200" style="background-color:#fff">
+    <div id="tabBar" class="flex border-b overflow-x-auto"></div>
+    <div id="tabContent" class="p-4"></div>
+  </div>
+
+  <p class="text-xs text-gray-400 mt-4 text-center">
+    Si abriste este archivo con doble-click (file://) y el fetch falla por CORS, serví la carpeta con
+    <code>python -m http.server 8080</code> y abrí <code>http://localhost:8080/dashboard.html</code>.
+  </p>
+</div>
+
+<script>
+let SPEC = null;
+const DEFAULT_BASE_URL = "http://127.0.0.1:8000";
+
+// Colores diferenciales por caso: azul / violeta / amarillo / verde
+const CASES = [
+  { key: "case1", label: "Case 1 · Messaging", matchHints: ["1", "messag"], inferPath: "/api/v1/case1/recommend-next-touchpoint", trainPath: "/api/v1/case1/train",
+    desc: "Secuenciación de mensajes: dado el historial de contacto de un prospecto (canales usados, respuestas, días desde el último contacto, etapa de compra), recomienda el próximo canal a usar (email, SMS, push, llamada o retargeting) sin saturarlo. Modelo: DQN.",
+    color: { base: "#2563eb", dark: "#1d4ed8", light: "#eff6ff", text: "#1e40af" } }, // azul
+  { key: "case2", label: "Case 2 · Pricing", matchHints: ["2", "pric"], inferPath: "/api/v1/case2/get-price", trainPath: "/api/v1/case2/train",
+    desc: "Pricing dinámico: ajusta el precio base de un producto según demanda, nivel de inventario y precio de la competencia, respetando un margen mínimo. Revisado por un gate de equidad (fairness) antes de aplicarse. Modelo: PPO.",
+    color: { base: "#7c3aed", dark: "#6d28d9", light: "#f5f3ff", text: "#5b21b6" } }, // violeta
+  { key: "case3", label: "Case 3 · Anomaly", matchHints: ["3", "anomal"], inferPath: "/api/v1/case3/alert-webhook", trainPath: "/api/v1/case3/train",
+    desc: "Triaje de anomalías: recibe una alerta (ej. caída de una métrica de negocio) y decide qué acción tomar (crear ticket, fusionar con otra, descartar), filtrando falsos positivos con un clasificador entrenado aparte del modelo principal. Modelo: DQN + clasificador de falsos positivos.",
+    color: { base: "#ca8a04", dark: "#a16207", light: "#fefce8", text: "#854d0e" } }, // amarillo
+  { key: "case4", label: "Case 4 · Accelerator", matchHints: ["4", "acceler"], inferPath: "/api/v1/case4/allocate", trainPath: "/api/v1/case4/train",
+    desc: "Asignación de recursos de aceleradora: reparte recursos limitados (horas de mentoría, capital de seguimiento, conexiones estratégicas) entre un portfolio de startups, maximizando el valor esperado según su tracción, equipo y mercado. Modelo: PPO.",
+    color: { base: "#16a34a", dark: "#15803d", light: "#f0fdf4", text: "#166534" } }, // verde
+];
+let activeTab = "case1";
+let activeSubtab = {}; // per case
+
+function baseUrl() { return DEFAULT_BASE_URL; }
+function apiKey() { return document.getElementById("apiKey").value.trim(); }
+function headers(json) {
+  const h = { "X-API-Key": apiKey() };
+  if (json) h["Content-Type"] = "application/json";
+  return h;
+}
+function caseColor(caseKey) {
+  return CASES.find(c => c.key === caseKey).color;
+}
+
+// Resalta un JSON con el color del caso (claves en el color del caso, strings/números/bools en tonos fijos)
+function syntaxHighlight(obj, color) {
+  let json = JSON.stringify(obj, null, 2);
+  json = json.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  json = json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+    if (/^"/.test(match)) {
+      if (/:$/.test(match)) {
+        return `<span style="color:${color.base};font-weight:700">${match}</span>`;
+      }
+      return `<span style="color:#6ee7b7">${match}</span>`; // string
+    }
+    if (/true|false/.test(match)) return `<span style="color:#7dd3fc">${match}</span>`;
+    if (/null/.test(match)) return `<span style="color:#9ca3af">${match}</span>`;
+    return `<span style="color:#fcd34d">${match}</span>`; // number
+  });
+  return json;
+}
+function respBoxStyle(color) {
+  return `background-color:#0f172a; border:1px solid ${color.base}88`;
+}
+
+function toggleHelp() {
+  const body = document.getElementById("helpBody");
+  const arrow = document.getElementById("helpArrow");
+  const isHidden = body.classList.contains("hidden");
+  body.classList.toggle("hidden");
+  arrow.textContent = isHidden ? "▾" : "▸";
+}
+
+function saveConfig() {
+  localStorage.setItem("pp_apiKey", apiKey());
+}
+function loadConfig() {
+  const k = localStorage.getItem("pp_apiKey");
+  if (k) document.getElementById("apiKey").value = k;
+  document.getElementById("baseUrlLabel").textContent = DEFAULT_BASE_URL;
+}
+
+async function checkHealth() {
+  const dot = document.getElementById("healthCircle");
+  const txt = document.getElementById("healthText");
+  dot.className = "w-3 h-3 rounded-full bg-yellow-400 inline-block";
+  txt.textContent = "verificando...";
+  try {
+    const res = await fetch(baseUrl() + "/health");
+    if (res.ok) {
+      dot.className = "w-3 h-3 rounded-full bg-green-500 inline-block";
+      txt.textContent = "online (" + res.status + ")";
+    } else {
+      dot.className = "w-3 h-3 rounded-full bg-red-500 inline-block";
+      txt.textContent = "error " + res.status;
+    }
+  } catch (e) {
+    dot.className = "w-3 h-3 rounded-full bg-red-500 inline-block";
+    txt.textContent = "sin conexión";
+  }
+}
+
+function resolveRef(ref) {
+  const parts = ref.replace("#/", "").split("/");
+  let node = SPEC;
+  for (const p of parts) node = node[p];
+  return node;
+}
+
+function exampleFromSchema(schema, depth) {
+  depth = depth || 0;
+  if (!schema || depth > 6) return null;
+  if (schema.$ref) return exampleFromSchema(resolveRef(schema.$ref), depth + 1);
+  if (schema.default !== undefined) return schema.default;
+  if (schema.example !== undefined) return schema.example;
+  if (Array.isArray(schema.enum) && schema.enum.length) return schema.enum[0];
+  if (schema.allOf) return exampleFromSchema(schema.allOf[0], depth + 1);
+  if (schema.anyOf) return exampleFromSchema(schema.anyOf.find(s => !s.$ref || resolveRef(s.$ref).type !== "null") || schema.anyOf[0], depth + 1);
+  const type = schema.type;
+  if (type === "object" || schema.properties) {
+    const obj = {};
+    const props = schema.properties || {};
+    for (const key in props) obj[key] = exampleFromSchema(props[key], depth + 1);
+    return obj;
+  }
+  if (type === "array") return [exampleFromSchema(schema.items, depth + 1)];
+  if (type === "string") return schema.format === "date-time" ? new Date().toISOString() : "";
+  if (type === "integer") return 0;
+  if (type === "number") return 0;
+  if (type === "boolean") return false;
+  return null;
+}
+
+function getOperation(path, method) {
+  if (!SPEC || !SPEC.paths || !SPEC.paths[path]) return null;
+  return SPEC.paths[path][method];
+}
+
+function getJsonRequestSchema(path, method) {
+  const op = getOperation(path, method);
+  const content = op && op.requestBody && op.requestBody.content;
+  const jsonSchema = content && content["application/json"] && content["application/json"].schema;
+  return jsonSchema || null;
+}
+
+function getQueryParams(path, method) {
+  const op = getOperation(path, method);
+  if (!op || !op.parameters) return [];
+  return op.parameters.filter(p => p.in === "query");
+}
+
+function resolveCaseTypeEnum() {
+  const schema = SPEC && SPEC.components && SPEC.components.schemas && SPEC.components.schemas.CaseType;
+  return (schema && schema.enum) || [];
+}
+
+function matchCaseTypeValue(caseDef, enumValues) {
+  const keywordHint = caseDef.matchHints.find(h => isNaN(h));
+  let best = enumValues.find(v => keywordHint && String(v).toLowerCase().includes(keywordHint));
+  if (!best) best = enumValues.find(v => String(v).toLowerCase().includes(caseDef.matchHints[0]));
+  return best || enumValues[0] || caseDef.key;
+}
+
+async function init() {
+  saveConfig();
+  const status = document.getElementById("loadStatus");
+  status.textContent = "cargando openapi.json...";
+  try {
+    const res = await fetch(baseUrl() + "/openapi.json");
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    SPEC = await res.json();
+    status.textContent = "API cargada ✓ (" + Object.keys(SPEC.paths || {}).length + " endpoints)";
+    buildTabs();
+    checkHealth();
+  } catch (e) {
+    status.textContent = "Error cargando la API: " + e.message + " (revisá CORS / que uvicorn esté corriendo)";
+  }
+}
+
+function buildTabs() {
+  const bar = document.getElementById("tabBar");
+  bar.innerHTML = "";
+  CASES.forEach(c => {
+    const isActive = c.key === activeTab;
+    const btn = document.createElement("button");
+    btn.className = "tab-btn px-4 py-3 text-sm whitespace-nowrap" + (isActive ? " active" : "");
+    btn.style.borderBottomColor = isActive ? c.color.base : "transparent";
+    btn.style.color = isActive ? c.color.text : "#6b7280";
+    btn.style.backgroundColor = isActive ? "#ffffffcc" : "transparent";
+    btn.textContent = c.label;
+    btn.onclick = () => { activeTab = c.key; buildTabs(); };
+    bar.appendChild(btn);
+  });
+  render();
+}
+
+function render() {
+  const caseDef = CASES.find(c => c.key === activeTab);
+  const content = document.getElementById("tabContent");
+  const sub = activeSubtab[activeTab] || "infer";
+  activeSubtab[activeTab] = sub;
+
+  const enumValues = resolveCaseTypeEnum();
+  const caseTypeValue = matchCaseTypeValue(caseDef, enumValues);
+  const c = caseDef.color;
+
+  const panel = document.getElementById("tabPanel");
+  panel.style.backgroundColor = c.light;
+  panel.style.border = `2px solid ${c.base}55`;
+  panel.style.borderTop = `6px solid ${c.base}`;
+
+  function subBtnStyle(name) {
+    const isActive = sub === name;
+    return `background-color:${isActive ? c.light : '#f3f4f6'};color:${isActive ? c.text : '#374151'};border:1px solid ${isActive ? c.base : 'transparent'}`;
+  }
+
+  const subLabels = {
+    infer: "Probar inferencia — pedile al modelo ya entrenado que resuelva un caso puntual con datos de ejemplo (editables).",
+    train: "Entrenar — genera/actualiza el modelo de este caso con un dataset subido previamente.",
+    datasets: "Datasets — subí, listá o previsualizá los datos históricos que usa este caso para entrenar."
+  };
+
+  content.innerHTML = `
+    <div class="rounded-lg p-3 mb-4" style="background-color:#ffffffcc; border-left:5px solid ${c.base}">
+      <div class="text-sm font-bold mb-1" style="color:${c.text}">${caseDef.label}</div>
+      <div class="text-xs" style="color:${c.text}">${caseDef.desc}</div>
+    </div>
+    <div class="flex gap-2 mb-2 flex-wrap">
+      <button class="subtab-btn text-sm px-3 py-1.5 rounded" style="${subBtnStyle('infer')}" onclick="setSubtab('${caseDef.key}','infer')">Probar inferencia</button>
+      <button class="subtab-btn text-sm px-3 py-1.5 rounded" style="${subBtnStyle('train')}" onclick="setSubtab('${caseDef.key}','train')">Entrenar</button>
+      <button class="subtab-btn text-sm px-3 py-1.5 rounded" style="${subBtnStyle('datasets')}" onclick="setSubtab('${caseDef.key}','datasets')">Datasets</button>
+    </div>
+    <p class="text-xs text-gray-500 mb-4 italic">${subLabels[sub]}</p>
+    <div id="subtabContent"></div>
+  `;
+
+  if (sub === "infer") renderInfer(caseDef);
+  else if (sub === "train") renderTrain(caseDef);
+  else renderDatasets(caseDef, caseTypeValue, enumValues);
+}
+
+function setSubtab(caseKey, sub) {
+  activeSubtab[caseKey] = sub;
+  render();
+}
+
+function renderInfer(caseDef) {
+  const c = caseDef.color;
+  const bodySchema = getJsonRequestSchema(caseDef.inferPath, "post");
+  const example = bodySchema ? exampleFromSchema(bodySchema) : {};
+  const queryParams = getQueryParams(caseDef.inferPath, "post");
+
+  const container = document.getElementById("subtabContent");
+  container.innerHTML = `
+    <div class="text-xs text-gray-500 mb-2">POST <code>${caseDef.inferPath}</code></div>
+    ${queryParams.length ? `<div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">${queryParams.map(p => `
+      <div>
+        <label class="text-xs font-semibold text-gray-500">${p.name}${p.required ? " *" : ""}</label>
+        <input id="qp_${caseDef.key}_${p.name}" type="text" value="${p.schema && p.schema.default !== undefined ? p.schema.default : "0"}" class="w-full border rounded px-2 py-1 text-sm">
+      </div>`).join("")}</div>` : ""}
+    <label class="text-xs font-semibold text-gray-500">Body (JSON, editable)</label>
+    <textarea id="body_${caseDef.key}" rows="14" class="w-full border rounded p-2 mt-1" style="border-color:${c.base}55">${JSON.stringify(example, null, 2)}</textarea>
+    <div class="flex items-center gap-2 mt-2">
+      <button onclick="sendInfer('${caseDef.key}')" class="text-white text-sm font-medium px-4 py-1.5 rounded" style="background-color:${c.base}" onmouseover="this.style.backgroundColor='${c.dark}'" onmouseout="this.style.backgroundColor='${c.base}'">Enviar</button>
+      <span id="infer_status_${caseDef.key}"></span>
+    </div>
+    <div class="mt-3">
+      <label class="text-xs font-semibold text-gray-500">Respuesta</label>
+      <pre id="infer_resp_${caseDef.key}" class="text-xs p-3 rounded mt-1 min-h-[80px]" style="${respBoxStyle(c)}"></pre>
+      <p class="text-xs text-gray-400 mt-1">
+        <code>rationale</code> = explicación en lenguaje simple de por qué se sugiere esto ·
+        <code>constraints_applied</code> = reglas de negocio que ajustaron la salida cruda del modelo ·
+        los campos numéricos de "confianza" (expected_value, priority_score, false_positive_probability) sirven para priorizar, no son certezas absolutas.
+      </p>
+    </div>
+  `;
+}
+
+async function sendInfer(caseKey) {
+  const caseDef = CASES.find(c => c.key === caseKey);
+  const statusEl = document.getElementById("infer_status_" + caseKey);
+  const respEl = document.getElementById("infer_resp_" + caseKey);
+  statusEl.innerHTML = '<span class="spinner"></span>';
+  let url = baseUrl() + caseDef.inferPath;
+  const queryParams = getQueryParams(caseDef.inferPath, "post");
+  if (queryParams.length) {
+    const qs = queryParams.map(p => {
+      const val = document.getElementById("qp_" + caseKey + "_" + p.name).value;
+      return encodeURIComponent(p.name) + "=" + encodeURIComponent(val);
+    }).join("&");
+    url += "?" + qs;
+  }
+  let bodyText = document.getElementById("body_" + caseKey).value;
+  let bodyObj;
+  try { bodyObj = JSON.parse(bodyText); } catch (e) {
+    statusEl.textContent = "JSON inválido";
+    return;
+  }
+  const t0 = performance.now();
+  try {
+    const res = await fetch(url, { method: "POST", headers: headers(true), body: JSON.stringify(bodyObj) });
+    const ms = (performance.now() - t0).toFixed(0);
+    const data = await res.json().catch(() => ({}));
+    statusEl.innerHTML = `<span class="${res.ok ? 'text-green-600' : 'text-red-600'} text-sm font-medium">HTTP ${res.status} · ${ms} ms</span>`;
+    respEl.innerHTML = syntaxHighlight(data, caseDef.color);
+  } catch (e) {
+    statusEl.innerHTML = '<span class="text-red-600 text-sm">Error de red: ' + e.message + '</span>';
+  }
+}
+
+function renderTrain(caseDef) {
+  const c = caseDef.color;
+  const bodySchema = getJsonRequestSchema(caseDef.trainPath, "post");
+  const example = bodySchema ? exampleFromSchema(bodySchema) : {};
+  const container = document.getElementById("subtabContent");
+  container.innerHTML = `
+    <div class="text-xs text-gray-500 mb-2">POST <code>${caseDef.trainPath}</code></div>
+    <label class="text-xs font-semibold text-gray-500">Body (JSON, editable) — ajustá dataset_id / timesteps según tu schema real</label>
+    <textarea id="train_body_${caseDef.key}" rows="10" class="w-full border rounded p-2 mt-1" style="border-color:${c.base}55">${JSON.stringify(example, null, 2)}</textarea>
+    <div class="flex items-center gap-2 mt-2">
+      <button onclick="sendTrain('${caseDef.key}')" class="text-white text-sm font-medium px-4 py-1.5 rounded" style="background-color:${c.base}" onmouseover="this.style.backgroundColor='${c.dark}'" onmouseout="this.style.backgroundColor='${c.base}'">Entrenar (puede tardar)</button>
+      <span id="train_status_${caseDef.key}"></span>
+    </div>
+    <div class="mt-3">
+      <label class="text-xs font-semibold text-gray-500">Respuesta</label>
+      <pre id="train_resp_${caseDef.key}" class="text-xs p-3 rounded mt-1 min-h-[80px]" style="${respBoxStyle(c)}"></pre>
+    </div>
+  `;
+}
+
+async function sendTrain(caseKey) {
+  const caseDef = CASES.find(c => c.key === caseKey);
+  const statusEl = document.getElementById("train_status_" + caseKey);
+  const respEl = document.getElementById("train_resp_" + caseKey);
+  statusEl.innerHTML = '<span class="spinner"></span> entrenando...';
+  let bodyObj;
+  try { bodyObj = JSON.parse(document.getElementById("train_body_" + caseKey).value); } catch (e) {
+    statusEl.textContent = "JSON inválido"; return;
+  }
+  const t0 = performance.now();
+  try {
+    const res = await fetch(baseUrl() + caseDef.trainPath, { method: "POST", headers: headers(true), body: JSON.stringify(bodyObj) });
+    const ms = ((performance.now() - t0) / 1000).toFixed(1);
+    const data = await res.json().catch(() => ({}));
+    statusEl.innerHTML = `<span class="${res.ok ? 'text-green-600' : 'text-red-600'} text-sm font-medium">HTTP ${res.status} · ${ms} s</span>`;
+    respEl.innerHTML = syntaxHighlight(data, caseDef.color);
+  } catch (e) {
+    statusEl.innerHTML = '<span class="text-red-600 text-sm">Error de red: ' + e.message + '</span>';
+  }
+}
+
+function renderDatasets(caseDef, caseTypeValue, enumValues) {
+  const c = caseDef.color;
+  const container = document.getElementById("subtabContent");
+  container.innerHTML = `
+    <div class="mb-3">
+      <label class="text-xs font-semibold text-gray-500">case_type (path param)</label>
+      <select id="ds_case_${caseDef.key}" class="border rounded px-2 py-1 text-sm ml-2">
+        ${enumValues.map(v => `<option value="${v}" ${v === caseTypeValue ? "selected" : ""}>${v}</option>`).join("")}
+      </select>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="border rounded p-3" style="border-color:${c.base}55">
+        <h3 class="font-semibold text-sm mb-2" style="color:${c.text}">Subir dataset</h3>
+        <input type="file" id="ds_file_${caseDef.key}" class="text-sm mb-2 block">
+        <button onclick="uploadDataset('${caseDef.key}')" class="text-white text-sm px-3 py-1.5 rounded" style="background-color:${c.base}">Subir</button>
+        <div id="ds_upload_status_${caseDef.key}" class="text-xs mt-2"></div>
+      </div>
+
+      <div class="border rounded p-3" style="border-color:${c.base}55">
+        <h3 class="font-semibold text-sm mb-2" style="color:${c.text}">Preview de dataset</h3>
+        <input type="text" id="ds_preview_id_${caseDef.key}" placeholder="dataset_id" class="border rounded px-2 py-1 text-sm w-full mb-2">
+        <button onclick="previewDataset('${caseDef.key}')" class="text-white text-sm px-3 py-1.5 rounded" style="background-color:${c.dark}">Preview</button>
+      </div>
+    </div>
+
+    <div class="mt-4">
+      <button onclick="listDatasets('${caseDef.key}')" class="text-sm px-3 py-1.5 rounded" style="background-color:${c.light};color:${c.text};border:1px solid ${c.base}55">Listar datasets</button>
+      <pre id="ds_list_${caseDef.key}" class="text-xs p-3 rounded mt-2 min-h-[60px]" style="${respBoxStyle(c)}"></pre>
+    </div>
+  `;
+}
+
+function dsCaseValue(caseKey) {
+  return document.getElementById("ds_case_" + caseKey).value;
+}
+
+async function listDatasets(caseKey) {
+  const caseDef = CASES.find(c => c.key === caseKey);
+  const el = document.getElementById("ds_list_" + caseKey);
+  el.textContent = "cargando...";
+  try {
+    const res = await fetch(`${baseUrl()}/api/v1/datasets/${dsCaseValue(caseKey)}`, { headers: headers(false) });
+    const data = await res.json().catch(() => ({}));
+    el.innerHTML = `HTTP ${res.status}\n` + syntaxHighlight(data, caseDef.color);
+  } catch (e) {
+    el.textContent = "Error: " + e.message;
+  }
+}
+
+async function uploadDataset(caseKey) {
+  const statusEl = document.getElementById("ds_upload_status_" + caseKey);
+  const fileInput = document.getElementById("ds_file_" + caseKey);
+  if (!fileInput.files.length) { statusEl.textContent = "Elegí un archivo primero."; return; }
+  const fd = new FormData();
+  fd.append("file", fileInput.files[0]);
+  statusEl.innerHTML = '<span class="spinner"></span> subiendo...';
+  try {
+    const res = await fetch(`${baseUrl()}/api/v1/datasets/${dsCaseValue(caseKey)}`, {
+      method: "POST",
+      headers: { "X-API-Key": apiKey() },
+      body: fd
+    });
+    const data = await res.json().catch(() => ({}));
+    statusEl.innerHTML = `<span class="${res.ok ? 'text-green-600' : 'text-red-600'}">HTTP ${res.status}</span><pre class="text-xs mt-1">${JSON.stringify(data, null, 2)}</pre>`;
+  } catch (e) {
+    statusEl.innerHTML = '<span class="text-red-600">Error: ' + e.message + '</span>';
+  }
+}
+
+async function previewDataset(caseKey) {
+  const caseDef = CASES.find(c => c.key === caseKey);
+  const id = document.getElementById("ds_preview_id_" + caseKey).value.trim();
+  if (!id) { alert("Ingresá un dataset_id (mirá la lista de arriba)"); return; }
+  const el = document.getElementById("ds_list_" + caseKey);
+  el.textContent = "cargando preview...";
+  try {
+    const res = await fetch(`${baseUrl()}/api/v1/datasets/${dsCaseValue(caseKey)}/${id}/preview`, { headers: headers(false) });
+    const data = await res.json().catch(() => ({}));
+    el.innerHTML = `HTTP ${res.status}\n` + syntaxHighlight(data, caseDef.color);
+  } catch (e) {
+    el.textContent = "Error: " + e.message;
+  }
+}
+
+loadConfig();
+buildTabs();
+</script>
+</body>
+</html>
