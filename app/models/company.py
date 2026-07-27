@@ -16,6 +16,6 @@ class Company(Base):
     contact_email = Column(String(255), nullable=False)
     api_key = Column(String(128), unique=True, index=True, nullable=False)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=dt.datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: dt.datetime.now(dt.timezone.utc))
 
     datasets = relationship("Dataset", back_populates="company", cascade="all, delete-orphan")

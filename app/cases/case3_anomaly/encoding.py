@@ -52,7 +52,7 @@ def record_to_payload(record: dict) -> AlertWebhookPayload:
         metric_name=str(record.get("metric_name", "unknown")),
         z_score=float(record.get("z_score", 0.0) or 0.0),
         pct_change=pct_change,
-        triggered_at=record.get("triggered_at") or dt.datetime.utcnow(),
+        triggered_at=record.get("triggered_at") or dt.datetime.now(dt.timezone.utc),
         business_context=record.get("business_context"),
         historical_similar_count=int(record.get("historical_similar_count", 0) or 0),
         estimated_financial_impact=estimated_financial_impact,

@@ -1,22 +1,26 @@
 """Lógica de negocio del Caso 6.2: estima el valor esperado de cada startup del
 portfolio y resuelve la asignación de recursos del período vía LP."""
-import os
-
+from app.core import model_registry
 from app.core.config import get_settings
 from app.cases.case4_accelerator.constraints import apply_portfolio_allocation
 from app.cases.case4_accelerator.policy import AcceleratorPolicy
 from app.cases.case4_accelerator.schemas import AllocationRequest, AllocationResponse
 
 settings = get_settings()
+CASE = "case4_accelerator"
 
-_policy_cache: dict[int, AcceleratorPolicy] = {}
+# Ver comentario equivalente en case1_messaging/service.py.
+_policy_cache: dict[int, tuple[str | None, AcceleratorPolicy]] = {}
 
 
 def _get_policy_for_company(company_id: int) -> AcceleratorPolicy:
-    if company_id not in _policy_cache:
-        model_path = os.path.join(settings.MODELS_DIR, str(company_id), "case4_accelerator", "model.zip")
-        _policy_cache[company_id] = AcceleratorPolicy(model_path=model_path)
-    return _policy_cache[company_id]
+    current_version_id = model_registry.get_current_version_id(settings.MODELS_DIR, company_id, CASE)
+    cached = _policy_cache.get(company_id)
+    if cached is None or cached[0] != current_version_id:
+        model_path = model_registry.get_current_artifact_path(settings.MODELS_DIR, company_id, CASE, "model.zip")
+        cached = (current_version_id, AcceleratorPolicy(model_path=model_path))
+        _policy_cache[company_id] = cached
+    return cached[1]
 
 
 def allocate_resources(company_id: int, request: AllocationRequest) -> AllocationResponse:

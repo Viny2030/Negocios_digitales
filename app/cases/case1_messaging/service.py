@@ -1,22 +1,29 @@
 """Lógica de negocio del Caso 1.1: resuelve el modelo de la empresa, aplica las
 restricciones de cadencia/presupuesto y arma la respuesta."""
-import os
-
+from app.core import model_registry
 from app.core.config import get_settings
 from app.cases.case1_messaging.constraints import apply_frequency_and_budget_filter
 from app.cases.case1_messaging.policy import MessagingPolicy
 from app.cases.case1_messaging.schemas import ChannelBudget, ProspectProfile, RecommendationResponse
 
 settings = get_settings()
+CASE = "case1_messaging"
 
-_policy_cache: dict[int, MessagingPolicy] = {}
+# Cachea (version_id, policy) por empresa. Comparar el version_id vigente en cada llamada
+# (lectura barata de un JSON) permite detectar un reentrenamiento aunque haya corrido en
+# otro proceso -- p.ej. un worker de Celery -- donde invalidate_policy_cache() de abajo
+# nunca se ejecuta porque vive en el proceso de la API, no en el del worker.
+_policy_cache: dict[int, tuple[str | None, MessagingPolicy]] = {}
 
 
 def _get_policy_for_company(company_id: int) -> MessagingPolicy:
-    if company_id not in _policy_cache:
-        model_path = os.path.join(settings.MODELS_DIR, str(company_id), "case1_messaging", "model.zip")
-        _policy_cache[company_id] = MessagingPolicy(model_path=model_path)
-    return _policy_cache[company_id]
+    current_version_id = model_registry.get_current_version_id(settings.MODELS_DIR, company_id, CASE)
+    cached = _policy_cache.get(company_id)
+    if cached is None or cached[0] != current_version_id:
+        model_path = model_registry.get_current_artifact_path(settings.MODELS_DIR, company_id, CASE, "model.zip")
+        cached = (current_version_id, MessagingPolicy(model_path=model_path))
+        _policy_cache[company_id] = cached
+    return cached[1]
 
 
 def recommend_next_touchpoint(

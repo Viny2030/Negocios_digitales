@@ -2,6 +2,8 @@
 Punto de entrada de la aplicación FastAPI.
 Ejecutar en desarrollo con:  uvicorn app.main:app --reload
 """
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -10,6 +12,13 @@ from app.core.config import get_settings
 from app.core.database import init_db
 
 settings = get_settings()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
+
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -20,6 +29,7 @@ app = FastAPI(
         "y entrena/consulta su propio modelo."
     ),
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -29,11 +39,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-@app.on_event("startup")
-def on_startup():
-    init_db()
 
 
 @app.get("/health", tags=["health"])

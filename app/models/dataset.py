@@ -34,6 +34,6 @@ class Dataset(Base):
     row_count = Column(Integer, default=0)
     columns_schema = Column(Text, nullable=True)  # JSON con nombres/tipos de columnas detectadas
     status = Column(Enum(DatasetStatus), default=DatasetStatus.uploaded)
-    created_at = Column(DateTime, default=dt.datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: dt.datetime.now(dt.timezone.utc))
 
     company = relationship("Company", back_populates="datasets")

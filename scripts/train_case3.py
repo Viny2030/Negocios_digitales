@@ -8,6 +8,7 @@ Uso manual:
 """
 import argparse
 import os
+import tempfile
 
 import joblib
 import pandas as pd
@@ -16,14 +17,16 @@ from sklearn.model_selection import train_test_split
 from sqlalchemy.orm import Session
 
 from app.cases.case3_anomaly.env import AnomalyTriageEnv
+from app.core import model_registry
 from app.core.config import get_settings
 from app.core.database import SessionLocal
 from app.models.dataset import Dataset
 
 settings = get_settings()
+CASE = "case3_anomaly"
 
 
-def _train_fp_classifier(historical_df: pd.DataFrame, out_dir: str) -> str | None:
+def _train_fp_classifier(historical_df: pd.DataFrame, tmp_dir: str) -> str | None:
     """Espera columnas: z_score, pct_change, historical_similar_count, estimated_financial_impact,
     label (1 = false_positive, 0 = real_incident). Si el dataset no trae `label`, se omite este paso."""
     if "label" not in historical_df.columns:
@@ -38,9 +41,9 @@ def _train_fp_classifier(historical_df: pd.DataFrame, out_dir: str) -> str | Non
     clf = RandomForestClassifier(n_estimators=200, random_state=42)
     clf.fit(X_train, y_train)
 
-    out_path = os.path.join(out_dir, "fp_classifier.joblib")
-    joblib.dump(clf, out_path)
-    return out_path
+    tmp_path = os.path.join(tmp_dir, "fp_classifier.joblib")
+    joblib.dump(clf, tmp_path)
+    return tmp_path
 
 
 def train_for_company(company_id: int, dataset_id: int, timesteps: int = 50_000) -> dict:
@@ -55,18 +58,36 @@ def train_for_company(company_id: int, dataset_id: int, timesteps: int = 50_000)
     finally:
         db.close()
 
-    out_dir = os.path.join(settings.MODELS_DIR, str(company_id), "case3_anomaly")
+    version_id = model_registry.new_version_id("dqn")
+    out_dir = os.path.join(settings.MODELS_DIR, str(company_id), CASE)
     os.makedirs(out_dir, exist_ok=True)
 
-    classifier_path = _train_fp_classifier(historical_df, out_dir)
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        classifier_tmp_path = _train_fp_classifier(historical_df, tmp_dir)
 
-    env = AnomalyTriageEnv(historical_df=historical_df)
-    model = DQN("MlpPolicy", env, verbose=0)
-    model.learn(total_timesteps=timesteps)
-    rl_path = os.path.join(out_dir, "model.zip")
-    model.save(rl_path)
+        env = AnomalyTriageEnv(historical_df=historical_df)
+        model = DQN("MlpPolicy", env, verbose=0)
+        model.learn(total_timesteps=timesteps)
+        rl_tmp_path = os.path.join(tmp_dir, "model.zip")
+        model.save(rl_tmp_path)
 
-    return {"rl_model_path": rl_path, "classifier_path": classifier_path}
+        artifacts = {"model.zip": rl_tmp_path}
+        if classifier_tmp_path:
+            artifacts["fp_classifier.joblib"] = classifier_tmp_path
+
+        metrics = {"algorithm": "dqn", "timesteps": timesteps, "approved": True,
+                   "classifier_trained": classifier_tmp_path is not None}
+        version_dir = model_registry.save_version(
+            settings.MODELS_DIR, company_id, CASE, version_id, artifacts=artifacts, metrics=metrics,
+        )
+
+    model_registry.promote(settings.MODELS_DIR, company_id, CASE, version_id)
+
+    return {
+        "version_id": version_id, "version_dir": version_dir, "approved": True,
+        "rl_model_path": os.path.join(version_dir, "model.zip"),
+        "classifier_path": os.path.join(version_dir, "fp_classifier.joblib") if classifier_tmp_path else None,
+    }
 
 
 if __name__ == "__main__":

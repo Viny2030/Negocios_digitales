@@ -1,30 +1,39 @@
 """Lógica de negocio del Caso 3.3: clasifica falso positivo, decide la acción y (opcionalmente)
 crea el ticket priorizado en la herramienta de gestión de la empresa (Jira/Opsgenie/Zendesk)."""
-import os
-
+from app.core import model_registry
 from app.core.config import get_settings
 from app.cases.case3_anomaly.classifier import FalsePositiveClassifier
 from app.cases.case3_anomaly.policy import AnomalyTriagePolicy
 from app.cases.case3_anomaly.schemas import AlertWebhookPayload, TeamCapacity, TriageAction, TriageDecision
 
 settings = get_settings()
+CASE = "case3_anomaly"
 
-_policy_cache: dict[int, AnomalyTriagePolicy] = {}
-_classifier_cache: dict[int, FalsePositiveClassifier] = {}
+# Ver comentario equivalente en case1_messaging/service.py.
+_policy_cache: dict[int, tuple[str | None, AnomalyTriagePolicy]] = {}
+_classifier_cache: dict[int, tuple[str | None, FalsePositiveClassifier]] = {}
 
 
 def _get_policy_for_company(company_id: int) -> AnomalyTriagePolicy:
-    if company_id not in _policy_cache:
-        model_path = os.path.join(settings.MODELS_DIR, str(company_id), "case3_anomaly", "model.zip")
-        _policy_cache[company_id] = AnomalyTriagePolicy(model_path=model_path)
-    return _policy_cache[company_id]
+    current_version_id = model_registry.get_current_version_id(settings.MODELS_DIR, company_id, CASE)
+    cached = _policy_cache.get(company_id)
+    if cached is None or cached[0] != current_version_id:
+        model_path = model_registry.get_current_artifact_path(settings.MODELS_DIR, company_id, CASE, "model.zip")
+        cached = (current_version_id, AnomalyTriagePolicy(model_path=model_path))
+        _policy_cache[company_id] = cached
+    return cached[1]
 
 
 def _get_classifier_for_company(company_id: int) -> FalsePositiveClassifier:
-    if company_id not in _classifier_cache:
-        model_path = os.path.join(settings.MODELS_DIR, str(company_id), "case3_anomaly", "fp_classifier.joblib")
-        _classifier_cache[company_id] = FalsePositiveClassifier(model_path=model_path)
-    return _classifier_cache[company_id]
+    current_version_id = model_registry.get_current_version_id(settings.MODELS_DIR, company_id, CASE)
+    cached = _classifier_cache.get(company_id)
+    if cached is None or cached[0] != current_version_id:
+        model_path = model_registry.get_current_artifact_path(
+            settings.MODELS_DIR, company_id, CASE, "fp_classifier.joblib",
+        )
+        cached = (current_version_id, FalsePositiveClassifier(model_path=model_path))
+        _classifier_cache[company_id] = cached
+    return cached[1]
 
 
 def _create_ticket_if_needed(action: TriageAction, payload: AlertWebhookPayload) -> bool:

@@ -16,14 +16,16 @@ import pandas as pd
 from sqlalchemy.orm import Session
 
 from app.cases.case4_accelerator.env import AcceleratorEnv
+from app.core import model_registry
 from app.core.config import get_settings
 from app.core.database import SessionLocal
 from app.models.dataset import Dataset
 
 settings = get_settings()
+CASE = "case4_accelerator"
 
 
-def train_for_company(company_id: int, dataset_id: int, algorithm: str = "ppo", timesteps: int = 50_000) -> str:
+def train_for_company(company_id: int, dataset_id: int, algorithm: str = "ppo", timesteps: int = 50_000) -> dict:
     from stable_baselines3 import PPO
 
     if algorithm.lower() != "ppo":
@@ -45,11 +47,20 @@ def train_for_company(company_id: int, dataset_id: int, algorithm: str = "ppo", 
     model = PPO("MlpPolicy", env, verbose=0)
     model.learn(total_timesteps=timesteps)
 
-    out_dir = os.path.join(settings.MODELS_DIR, str(company_id), "case4_accelerator")
+    version_id = model_registry.new_version_id(algorithm)
+    out_dir = os.path.join(settings.MODELS_DIR, str(company_id), CASE)
     os.makedirs(out_dir, exist_ok=True)
-    out_path = os.path.join(out_dir, "model_ppo.zip")
-    model.save(out_path)
-    return out_path
+    tmp_path = os.path.join(out_dir, f"_tmp_{version_id}.zip")
+    model.save(tmp_path)
+
+    metrics = {"algorithm": algorithm, "timesteps": timesteps, "approved": True}
+    version_dir = model_registry.save_version(
+        settings.MODELS_DIR, company_id, CASE, version_id,
+        artifacts={"model.zip": tmp_path}, metrics=metrics,
+    )
+    model_registry.promote(settings.MODELS_DIR, company_id, CASE, version_id)
+
+    return {"version_id": version_id, "version_dir": version_dir, "approved": True}
 
 
 if __name__ == "__main__":
@@ -60,5 +71,5 @@ if __name__ == "__main__":
     parser.add_argument("--timesteps", type=int, default=50_000)
     args = parser.parse_args()
 
-    path = train_for_company(args.company_id, args.dataset_id, args.algorithm, args.timesteps)
-    print(f"Modelo guardado en: {path}")
+    result = train_for_company(args.company_id, args.dataset_id, args.algorithm, args.timesteps)
+    print(f"Versión {result['version_id']} guardada y promovida en: {result['version_dir']}")

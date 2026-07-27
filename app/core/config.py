@@ -27,6 +27,16 @@ class Settings(BaseSettings):
 
     CORS_ORIGINS: list[str] = ["*"]
 
+    # Broker/backend de Celery (cola real de entrenamiento, ver app/core/celery_app.py).
+    # En docker-compose apunta al servicio `redis`; en local, requiere un Redis corriendo
+    # (Docker, WSL, o Memurai en Windows) en este mismo host y puerto.
+    REDIS_URL: str = "redis://localhost:6379/0"
+
+    # Gating de equidad (case2 - pricing): si la diferencia de Demographic Parity entre
+    # segmentos supera este umbral tras entrenar, el modelo se guarda como versión pero
+    # NO se promueve a producción (sigue sirviendo la versión anterior aprobada).
+    FAIRNESS_DP_THRESHOLD: float = 0.10
+
 
 @lru_cache
 def get_settings() -> Settings:

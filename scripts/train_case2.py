@@ -3,6 +3,12 @@ Entrenamiento offline del Caso 2.1 (pricing dinámico) para una empresa específ
 Incorpora la penalización de equidad (Demographic Parity, vía Fairlearn) evaluada
 sobre el historial de transacciones antes/después del entrenamiento.
 
+Cada corrida genera una versión nueva en el registro de modelos (ver
+app/core/model_registry.py). La versión solo se promueve a "current" (la que sirve
+el endpoint /case2/get-price) si la diferencia de Demographic Parity entre segmentos
+no supera `settings.FAIRNESS_DP_THRESHOLD`; si la supera, queda guardada para
+inspección pero la empresa sigue sirviendo su última versión aprobada.
+
 Uso manual:
     python -m scripts.train_case2 --company-id 1 --dataset-id 5 --algorithm ppo --timesteps 50000
 """
@@ -13,17 +19,20 @@ import pandas as pd
 from sqlalchemy.orm import Session
 
 from app.cases.case2_pricing.env import PricingEnv
+from app.cases.case2_pricing.fairness import evaluate_fairness
+from app.core import model_registry
 from app.core.config import get_settings
 from app.core.database import SessionLocal
 from app.models.dataset import Dataset
 
 settings = get_settings()
+CASE = "case2_pricing"
 
 
 def train_for_company(
     company_id: int, dataset_id: int, algorithm: str = "ppo",
     timesteps: int = 50_000, fairness_penalty_weight: float = 1.0,
-) -> str:
+) -> dict:
     from stable_baselines3 import DQN, PPO
 
     db: Session = SessionLocal()
@@ -40,14 +49,44 @@ def train_for_company(
     model = algo_cls("MlpPolicy", env, verbose=0)
     model.learn(total_timesteps=timesteps)
 
-    # TODO: evaluación post-entrenamiento con fairlearn.metrics.demographic_parity_difference
-    # sobre `historical_df` segmentado, y bloquear el despliegue si supera el umbral aceptado.
+    fairness_result = evaluate_fairness(model, historical_df, env.min_multiplier, env.max_multiplier)
+    dp_diff = fairness_result.get("demographic_parity_difference")
+    # Si no se pudo evaluar (falta la columna user_segment), no bloqueamos por falta de datos,
+    # pero queda registrado en la metadata de la versión para revisión manual.
+    approved = dp_diff is None or dp_diff <= settings.FAIRNESS_DP_THRESHOLD
 
-    out_dir = os.path.join(settings.MODELS_DIR, str(company_id), "case2_pricing")
+    version_id = model_registry.new_version_id(algorithm)
+    out_dir = os.path.join(settings.MODELS_DIR, str(company_id), CASE)
     os.makedirs(out_dir, exist_ok=True)
-    out_path = os.path.join(out_dir, f"model_{algorithm.lower()}.zip")
-    model.save(out_path)
-    return out_path
+    tmp_path = os.path.join(out_dir, f"_tmp_{version_id}.zip")
+    model.save(tmp_path)
+
+    metrics = {
+        "algorithm": algorithm,
+        "timesteps": timesteps,
+        "fairness_penalty_weight": fairness_penalty_weight,
+        "fairness": fairness_result,
+        "fairness_threshold": settings.FAIRNESS_DP_THRESHOLD,
+        "approved": approved,
+    }
+    version_dir = model_registry.save_version(
+        settings.MODELS_DIR, company_id, CASE, version_id,
+        artifacts={"model.zip": tmp_path}, metrics=metrics,
+    )
+
+    if approved:
+        model_registry.promote(settings.MODELS_DIR, company_id, CASE, version_id)
+    else:
+        print(
+            f"[case2] Versión {version_id} NO promovida: demographic_parity_difference="
+            f"{dp_diff} supera el umbral {settings.FAIRNESS_DP_THRESHOLD}. Sigue sirviendo "
+            f"la versión anterior aprobada (si existe)."
+        )
+
+    return {
+        "version_id": version_id, "version_dir": version_dir,
+        "approved": approved, "fairness": fairness_result,
+    }
 
 
 if __name__ == "__main__":
@@ -59,7 +98,8 @@ if __name__ == "__main__":
     parser.add_argument("--fairness-penalty-weight", type=float, default=1.0)
     args = parser.parse_args()
 
-    path = train_for_company(
+    result = train_for_company(
         args.company_id, args.dataset_id, args.algorithm, args.timesteps, args.fairness_penalty_weight,
     )
-    print(f"Modelo guardado en: {path}")
+    estado = "APROBADA y promovida" if result["approved"] else "guardada pero NO promovida (falló equidad)"
+    print(f"Versión {result['version_id']} {estado}. Detalle de equidad: {result['fairness']}")
