@@ -4,15 +4,16 @@ Cada empresa recibe una api_key al registrarse (ver endpoints/companies.py).
 Todos los endpoints de negocio (/case1, /case2, /case3, /datasets) requieren
 el header X-API-Key y resuelven la empresa (tenant) a partir de él.
 """
+
 import secrets
 
 from fastapi import Depends, HTTPException, Security, status
 from fastapi.security import APIKeyHeader
 from sqlalchemy.orm import Session
 
+from app.models.company import Company
 from config import get_settings
 from database import get_db
-from app.models.company import Company
 
 settings = get_settings()
 api_key_header = APIKeyHeader(name=settings.API_KEY_HEADER, auto_error=False)

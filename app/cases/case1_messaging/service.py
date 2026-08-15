@@ -1,10 +1,11 @@
 """Lógica de negocio del Caso 1.1: resuelve el modelo de la empresa, aplica las
 restricciones de cadencia/presupuesto y arma la respuesta."""
+
 import model_registry
-from config import get_settings
 from app.cases.case1_messaging.constraints import apply_frequency_and_budget_filter
 from app.cases.case1_messaging.policy import MessagingPolicy
 from app.cases.case1_messaging.schemas import ChannelBudget, ProspectProfile, RecommendationResponse
+from config import get_settings
 
 settings = get_settings()
 CASE = "case1_messaging"
@@ -35,7 +36,9 @@ def recommend_next_touchpoint(
     action, value, rationale = policy.predict(profile)
 
     final_action, constraints_applied = apply_frequency_and_budget_filter(
-        action, profile, channel_budget or ChannelBudget(),
+        action,
+        profile,
+        channel_budget or ChannelBudget(),
     )
     if final_action != action:
         rationale += f" Ajustado de '{action.value}' a '{final_action.value}' por restricciones de negocio."

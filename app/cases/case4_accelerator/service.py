@@ -1,10 +1,11 @@
 """Lógica de negocio del Caso 6.2: estima el valor esperado de cada startup del
 portfolio y resuelve la asignación de recursos del período vía LP."""
+
 import model_registry
-from config import get_settings
 from app.cases.case4_accelerator.constraints import apply_portfolio_allocation
 from app.cases.case4_accelerator.policy import AcceleratorPolicy
 from app.cases.case4_accelerator.schemas import AllocationRequest, AllocationResponse
+from config import get_settings
 
 settings = get_settings()
 CASE = "case4_accelerator"
@@ -28,7 +29,9 @@ def allocate_resources(company_id: int, request: AllocationRequest) -> Allocatio
     value_scores = policy.score_portfolio(request.startups, request.resources)
 
     allocations, constraints_applied = apply_portfolio_allocation(
-        value_scores, request.startups, request.resources,
+        value_scores,
+        request.startups,
+        request.resources,
     )
 
     if allocations:
@@ -40,7 +43,9 @@ def allocate_resources(company_id: int, request: AllocationRequest) -> Allocatio
     else:
         rationale = "Portfolio vacío: no hay startups para asignar recursos."
 
-    return AllocationResponse(allocations=allocations, constraints_applied=constraints_applied, rationale=rationale)
+    return AllocationResponse(
+        allocations=allocations, constraints_applied=constraints_applied, rationale=rationale
+    )
 
 
 def invalidate_policy_cache(company_id: int) -> None:

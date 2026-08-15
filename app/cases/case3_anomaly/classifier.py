@@ -3,6 +3,7 @@ Clasificador auxiliar (Caso 3.3): estima la probabilidad de que una alerta sea u
 positivo (ruido) vs. una anomalía real, ANTES de que el agente RL decida el curso de acción.
 Se entrena con logs históricos de tickets resueltos (columna label: real_incident/false_positive).
 """
+
 import os
 
 import joblib
@@ -19,12 +20,16 @@ class FalsePositiveClassifier:
 
     @staticmethod
     def _payload_to_features(payload: AlertWebhookPayload) -> np.ndarray:
-        return np.array([[
-            abs(payload.z_score),
-            payload.pct_change or 0.0,
-            payload.historical_similar_count,
-            1.0 if payload.estimated_financial_impact else 0.0,
-        ]])
+        return np.array(
+            [
+                [
+                    abs(payload.z_score),
+                    payload.pct_change or 0.0,
+                    payload.historical_similar_count,
+                    1.0 if payload.estimated_financial_impact else 0.0,
+                ]
+            ]
+        )
 
     def predict_false_positive_proba(self, payload: AlertWebhookPayload) -> float:
         if self.model is None:

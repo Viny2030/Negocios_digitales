@@ -8,6 +8,7 @@ alerta sino un portfolio completo de startups. Como stable-baselines3 necesita u
 tamaño de observación y de acción FIJO, el portfolio se vectoriza con padding/truncado
 a MAX_STARTUPS slots (startups de más se procesan en tandas desde policy.py).
 """
+
 import numpy as np
 import pandas as pd
 

@@ -2,6 +2,7 @@
 Entorno Gymnasium para el agente de triaje de anomalías (Caso 3.3). Entrenamiento offline
 (scripts/train_case3.py) calibrado con NAB / Yahoo Anomaly Dataset + logs de tickets propios.
 """
+
 import numpy as np
 
 try:
@@ -72,7 +73,9 @@ class AnomalyTriageEnv(gym.Env if gym else object):
         if is_real_anomaly and chosen == TriageAction.ignore:
             reward = -2.0  # penalización severa por ignorar una anomalía real
         elif not is_real_anomaly and chosen in (
-            TriageAction.investigate_deep, TriageAction.escalate_engineering, TriageAction.escalate_business,
+            TriageAction.investigate_deep,
+            TriageAction.escalate_engineering,
+            TriageAction.escalate_business,
         ):
             reward = -cost  # costo hundido en falso positivo investigado a fondo
         elif is_real_anomaly and chosen != TriageAction.ignore:

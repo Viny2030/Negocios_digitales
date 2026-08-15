@@ -1,9 +1,27 @@
 def test_allocate_respects_total_mentorship_budget(client, company_api_key):
     payload = {
         "startups": [
-            {"startup_id": "s1", "traction_score": 0.9, "team_score": 0.8, "market_score": 0.7, "runway_months": 6},
-            {"startup_id": "s2", "traction_score": 0.3, "team_score": 0.4, "market_score": 0.5, "runway_months": 12},
-            {"startup_id": "s3", "traction_score": 0.6, "team_score": 0.6, "market_score": 0.6, "runway_months": 9},
+            {
+                "startup_id": "s1",
+                "traction_score": 0.9,
+                "team_score": 0.8,
+                "market_score": 0.7,
+                "runway_months": 6,
+            },
+            {
+                "startup_id": "s2",
+                "traction_score": 0.3,
+                "team_score": 0.4,
+                "market_score": 0.5,
+                "runway_months": 12,
+            },
+            {
+                "startup_id": "s3",
+                "traction_score": 0.6,
+                "team_score": 0.6,
+                "market_score": 0.6,
+                "runway_months": 9,
+            },
         ],
         "resources": {
             "mentorship_hours_available": 30,
@@ -27,8 +45,20 @@ def test_allocate_respects_total_mentorship_budget(client, company_api_key):
 def test_allocate_respects_concentration_cap(client, company_api_key):
     payload = {
         "startups": [
-            {"startup_id": "s1", "traction_score": 0.9, "team_score": 0.9, "market_score": 0.9, "runway_months": 6},
-            {"startup_id": "s2", "traction_score": 0.1, "team_score": 0.1, "market_score": 0.1, "runway_months": 6},
+            {
+                "startup_id": "s1",
+                "traction_score": 0.9,
+                "team_score": 0.9,
+                "market_score": 0.9,
+                "runway_months": 6,
+            },
+            {
+                "startup_id": "s2",
+                "traction_score": 0.1,
+                "team_score": 0.1,
+                "market_score": 0.1,
+                "runway_months": 6,
+            },
         ],
         "resources": {
             "mentorship_hours_available": 100,
@@ -49,7 +79,13 @@ def test_allocate_respects_concentration_cap(client, company_api_key):
 def test_allocate_limits_strategic_connections(client, company_api_key):
     payload = {
         "startups": [
-            {"startup_id": f"s{i}", "traction_score": 0.5, "team_score": 0.5, "market_score": 0.5, "runway_months": 6}
+            {
+                "startup_id": f"s{i}",
+                "traction_score": 0.5,
+                "team_score": 0.5,
+                "market_score": 0.5,
+                "runway_months": 6,
+            }
             for i in range(5)
         ],
         "resources": {
@@ -68,7 +104,9 @@ def test_allocate_limits_strategic_connections(client, company_api_key):
 
 def test_allocate_requires_api_key(client):
     payload = {
-        "startups": [{"startup_id": "s1", "traction_score": 0.5, "team_score": 0.5, "market_score": 0.5, "runway_months": 6}],
+        "startups": [
+            {"startup_id": "s1", "traction_score": 0.5, "team_score": 0.5, "market_score": 0.5, "runway_months": 6}
+        ],
         "resources": {"mentorship_hours_available": 10},
     }
     resp = client.post("/api/v1/case4/allocate", json=payload)

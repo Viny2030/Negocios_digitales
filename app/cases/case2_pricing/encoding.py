@@ -4,12 +4,29 @@ Codificación de estado del Caso 2.1 — única fuente de verdad, usada tanto po
 Ver app/cases/case1_messaging/encoding.py para la misma razón de ser: entrenar y
 predecir con codificaciones distintas invalida el modelo.
 """
+
+import hashlib
+
 import numpy as np
 import pandas as pd
 
 from app.cases.case2_pricing.schemas import PriceRequest
 
 STATE_DIM = 6
+
+
+def _stable_segment_code(segment: str) -> float:
+    """Codifica `user_segment` a un número en [0, 1). Usa hashlib en vez del `hash()`
+    builtin de Python: `hash()` de un string está salado por proceso (PYTHONHASHSEED,
+    aleatorio por defecto desde Python 3.3), así que el mismo segmento producía un
+    código distinto en cada reinicio del proceso -- y, peor, distinto entre el proceso
+    de la API y el worker de Celery que entrena. hashlib.sha256 es determinista entre
+    procesos y entre corridas, así que el mismo segmento siempre cae en el mismo bucket.
+    Sigue siendo un placeholder grosero (colisiones entre segmentos distintos son
+    posibles); para producción, reemplazar por un vocabulario explícito de segmentos
+    conocidos de la empresa (ver record_to_request) con un índice fijo por segmento."""
+    digest = hashlib.sha256(segment.encode("utf-8")).hexdigest()
+    return (int(digest[:8], 16) % 100) / 100.0
 
 
 def request_to_vector(request: PriceRequest) -> np.ndarray:
@@ -21,7 +38,7 @@ def request_to_vector(request: PriceRequest) -> np.ndarray:
     vector = [
         request.inventory_level_pct / 100.0,
         min(request.base_cost / 1000.0, 1.0),
-        hash(request.user_segment) % 100 / 100.0,  # placeholder de encoding de segmento
+        _stable_segment_code(request.user_segment),
         0.0,  # historial de rechazo (vendría del dataset/CRM)
         competitor_norm,
         request.demand_index,
@@ -34,7 +51,11 @@ def record_to_request(record: dict) -> PriceRequest:
     PriceRequest. Nombres de columna canónicos con defaults tolerantes; documentar el
     mapeo esperado en el README del caso."""
     competitor_avg_price = record.get("competitor_avg_price")
-    if competitor_avg_price is not None and isinstance(competitor_avg_price, float) and pd.isna(competitor_avg_price):
+    if (
+        competitor_avg_price is not None
+        and isinstance(competitor_avg_price, float)
+        and pd.isna(competitor_avg_price)
+    ):
         competitor_avg_price = None
 
     return PriceRequest(

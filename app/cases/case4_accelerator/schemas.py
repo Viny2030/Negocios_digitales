@@ -20,6 +20,7 @@ fiel al enfoque del enunciado: "RL con múltiples agentes pasivos (las startups)
 agente activo (la incubadora); función de recompensa definida sobre el portfolio
 completo".
 """
+
 from pydantic import BaseModel, Field
 
 
@@ -27,12 +28,16 @@ class StartupProfile(BaseModel):
     """Estado (S) de una startup del portfolio."""
 
     startup_id: str
-    traction_score: float = Field(..., ge=0, le=1, description="Tracción normalizada (revenue, usuarios, crecimiento)")
+    traction_score: float = Field(
+        ..., ge=0, le=1, description="Tracción normalizada (revenue, usuarios, crecimiento)"
+    )
     team_score: float = Field(..., ge=0, le=1)
     market_score: float = Field(..., ge=0, le=1, description="Tamaño y momentum del mercado objetivo")
     runway_months: float = Field(..., ge=0)
     past_response_score: float = Field(
-        default=0.5, ge=0, le=1,
+        default=0.5,
+        ge=0,
+        le=1,
         description="Qué tan bien respondió esta startup a intervenciones previas (0=nula, 1=excelente)",
     )
     mentorship_hours_received_last_period: float = Field(default=0.0, ge=0)

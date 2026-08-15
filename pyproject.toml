@@ -1,0 +1,17 @@
+[tool.ruff]
+line-length = 115
+target-version = "py312"
+
+[tool.ruff.lint]
+# E/F = pyflakes+pycodestyle básicos, I = orden de imports (isort), UP = sintaxis moderna,
+# B = bugbear (patrones propensos a bugs, ej. mutable default arguments).
+select = ["E", "F", "I", "UP", "B"]
+ignore = [
+    "E501",  # largo de línea: ya lo controla line-length + hay strings largos en docstrings
+    "B008",  # Depends(...)/File(...) como default es el patrón idiomático de FastAPI
+    "B905",  # zip() sin strict=: no vale la pena tocar los 3 usos existentes en este pase
+    "UP042", # class Foo(str, enum.Enum) -> StrEnum: cambia sutilmente la serialización: se deja como está
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "config", "database", "security", "model_registry", "celery_app", "rate_limit"]

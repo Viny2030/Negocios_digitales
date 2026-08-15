@@ -5,6 +5,7 @@ Se usa solo en scripts/train_case1.py (entrenamiento offline), no en el request-
 El entorno se calibra con el dataset histórico de campañas de la empresa
 (exportado de HubSpot/Salesforce/etc., ver app/api/v1/endpoints/datasets.py).
 """
+
 import numpy as np
 
 try:

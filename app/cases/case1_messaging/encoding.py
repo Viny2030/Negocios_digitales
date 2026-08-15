@@ -6,6 +6,7 @@ implícita (y nunca completada) en `MessagingSequencingEnv._sample_prospect`. Te
 separadas es peligroso: si difieren, el modelo se entrena con una codificación y se
 consulta con otra, y las predicciones dejan de tener sentido.
 """
+
 import numpy as np
 import pandas as pd
 

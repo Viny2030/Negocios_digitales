@@ -1,11 +1,12 @@
 """Alta y gestión de empresas clientes (tenants) de la plataforma."""
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from database import get_db
-from security import generate_api_key, get_current_company
 from app.models.company import Company
 from app.schemas.common import CompanyCreate, CompanyOut
+from database import get_db
+from security import generate_api_key, get_current_company
 
 router = APIRouter(prefix="/companies", tags=["companies"])
 

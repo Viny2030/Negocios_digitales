@@ -4,6 +4,7 @@ guardado por empresa (storage/models/<company_id>/case1_messaging/model.zip).
 Si no existe modelo entrenado todavía, usa una heurística de fallback para que
 el endpoint funcione desde el día 1 (útil para demo y para integraciones tempranas).
 """
+
 import os
 
 from app.cases.case1_messaging.encoding import profile_to_vector

@@ -6,7 +6,9 @@ Entrenamiento offline del Caso 3.3 (triaje de anomalías) para una empresa espec
 Uso manual:
     python -m scripts.train_case3 --company-id 1 --dataset-id 7 --timesteps 50000
 """
+
 import argparse
+import logging
 import os
 import tempfile
 
@@ -16,12 +18,13 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from sqlalchemy.orm import Session
 
-from app.cases.case3_anomaly.env import AnomalyTriageEnv
 import model_registry
+from app.cases.case3_anomaly.env import AnomalyTriageEnv
+from app.models.dataset import Dataset
 from config import get_settings
 from database import SessionLocal
-from app.models.dataset import Dataset
 
+logger = logging.getLogger(__name__)
 settings = get_settings()
 CASE = "case3_anomaly"
 
@@ -75,22 +78,35 @@ def train_for_company(company_id: int, dataset_id: int, timesteps: int = 50_000)
         if classifier_tmp_path:
             artifacts["fp_classifier.joblib"] = classifier_tmp_path
 
-        metrics = {"algorithm": "dqn", "timesteps": timesteps, "approved": True,
-                   "classifier_trained": classifier_tmp_path is not None}
+        metrics = {
+            "algorithm": "dqn",
+            "timesteps": timesteps,
+            "approved": True,
+            "classifier_trained": classifier_tmp_path is not None,
+        }
         version_dir = model_registry.save_version(
-            settings.MODELS_DIR, company_id, CASE, version_id, artifacts=artifacts, metrics=metrics,
+            settings.MODELS_DIR,
+            company_id,
+            CASE,
+            version_id,
+            artifacts=artifacts,
+            metrics=metrics,
         )
 
     model_registry.promote(settings.MODELS_DIR, company_id, CASE, version_id)
 
     return {
-        "version_id": version_id, "version_dir": version_dir, "approved": True,
+        "version_id": version_id,
+        "version_dir": version_dir,
+        "approved": True,
         "rl_model_path": os.path.join(version_dir, "model.zip"),
         "classifier_path": os.path.join(version_dir, "fp_classifier.joblib") if classifier_tmp_path else None,
     }
 
 
 if __name__ == "__main__":
+    import logging_config  # noqa: F401  (configura el formato/nivel de logging al correr como script)
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--company-id", type=int, required=True)
     parser.add_argument("--dataset-id", type=int, required=True)
@@ -98,4 +114,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     paths = train_for_company(args.company_id, args.dataset_id, args.timesteps)
-    print(f"Modelos guardados: {paths}")
+    logger.info("Modelos guardados: %s", paths)

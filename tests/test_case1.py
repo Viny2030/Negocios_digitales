@@ -19,7 +19,14 @@ def test_recommend_next_touchpoint(client, company_api_key):
     body = resp.json()
     assert body["prospect_id"] == "p-123"
     assert body["recommended_action"] in [
-        "email_a", "email_b", "email_c", "retargeting_meta", "sms", "push", "call", "wait",
+        "email_a",
+        "email_b",
+        "email_c",
+        "retargeting_meta",
+        "sms",
+        "push",
+        "call",
+        "wait",
     ]
 
 

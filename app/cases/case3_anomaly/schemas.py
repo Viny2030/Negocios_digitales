@@ -7,6 +7,7 @@ Acciones (A): ignorar, investigar superficial (5min), investigar a fondo (1h),
 Recompensa (R): impacto recuperado neto del costo de investigación, penalización por
                falsos positivos investigados y por anomalías reales ignoradas.
 """
+
 import datetime as dt
 import enum
 

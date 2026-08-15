@@ -7,13 +7,14 @@ ni reintentar si fallaba).
 Requiere un broker Redis (ver `docker-compose.yml`, servicio `redis`, o un Redis local).
 
 Levantar un worker:
-    celery -A app.core.celery_app worker --loglevel=info --pool=solo   # Windows
-    celery -A app.core.celery_app worker --loglevel=info               # Linux/Mac/Docker
+    celery -A celery_app worker --loglevel=info --pool=solo   # Windows
+    celery -A celery_app worker --loglevel=info               # Linux/Mac/Docker
 
 `--pool=solo` es necesario en Windows porque Celery no soporta el pool `prefork`
 (basado en os.fork) fuera de Linux/Mac; en el contenedor Docker (Linux) se usa el pool
 por defecto.
 """
+
 from celery import Celery
 
 from config import get_settings

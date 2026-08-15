@@ -7,6 +7,7 @@ si no, cae a una heurística de reglas simples ponderando tracción, equipo, mer
 respuesta a intervenciones previas — útil para que el endpoint funcione desde el día
 1, igual que en los otros 3 casos.
 """
+
 import os
 
 import numpy as np

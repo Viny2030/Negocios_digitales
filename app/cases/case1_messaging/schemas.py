@@ -5,7 +5,7 @@ Estado (S): perfil de interacción acumulado del prospecto.
 Acciones (A): touchpoints disponibles (email A/B/C, retargeting Meta, SMS, push, llamada, esperar).
 Recompensa (R): conversión neta del costo de contacto, penalización por fatiga.
 """
-import datetime as dt
+
 import enum
 
 from pydantic import BaseModel, Field

@@ -4,7 +4,7 @@ Incorpora la penalización de equidad (Demographic Parity, vía Fairlearn) evalu
 sobre el historial de transacciones antes/después del entrenamiento.
 
 Cada corrida genera una versión nueva en el registro de modelos (ver
-app/core/model_registry.py). La versión solo se promueve a "current" (la que sirve
+model_registry.py). La versión solo se promueve a "current" (la que sirve
 el endpoint /case2/get-price) si la diferencia de Demographic Parity entre segmentos
 no supera `settings.FAIRNESS_DP_THRESHOLD`; si la supera, queda guardada para
 inspección pero la empresa sigue sirviendo su última versión aprobada.
@@ -12,26 +12,32 @@ inspección pero la empresa sigue sirviendo su última versión aprobada.
 Uso manual:
     python -m scripts.train_case2 --company-id 1 --dataset-id 5 --algorithm ppo --timesteps 50000
 """
+
 import argparse
+import logging
 import os
 
 import pandas as pd
 from sqlalchemy.orm import Session
 
+import model_registry
 from app.cases.case2_pricing.env import PricingEnv
 from app.cases.case2_pricing.fairness import evaluate_fairness
-import model_registry
+from app.models.dataset import Dataset
 from config import get_settings
 from database import SessionLocal
-from app.models.dataset import Dataset
 
+logger = logging.getLogger(__name__)
 settings = get_settings()
 CASE = "case2_pricing"
 
 
 def train_for_company(
-    company_id: int, dataset_id: int, algorithm: str = "ppo",
-    timesteps: int = 50_000, fairness_penalty_weight: float = 1.0,
+    company_id: int,
+    dataset_id: int,
+    algorithm: str = "ppo",
+    timesteps: int = 50_000,
+    fairness_penalty_weight: float = 1.0,
 ) -> dict:
     from stable_baselines3 import DQN, PPO
 
@@ -70,26 +76,36 @@ def train_for_company(
         "approved": approved,
     }
     version_dir = model_registry.save_version(
-        settings.MODELS_DIR, company_id, CASE, version_id,
-        artifacts={"model.zip": tmp_path}, metrics=metrics,
+        settings.MODELS_DIR,
+        company_id,
+        CASE,
+        version_id,
+        artifacts={"model.zip": tmp_path},
+        metrics=metrics,
     )
 
     if approved:
         model_registry.promote(settings.MODELS_DIR, company_id, CASE, version_id)
     else:
-        print(
-            f"[case2] Versión {version_id} NO promovida: demographic_parity_difference="
-            f"{dp_diff} supera el umbral {settings.FAIRNESS_DP_THRESHOLD}. Sigue sirviendo "
-            f"la versión anterior aprobada (si existe)."
+        logger.warning(
+            "[case2] Versión %s NO promovida: demographic_parity_difference=%s supera el "
+            "umbral %s. Sigue sirviendo la versión anterior aprobada (si existe).",
+            version_id,
+            dp_diff,
+            settings.FAIRNESS_DP_THRESHOLD,
         )
 
     return {
-        "version_id": version_id, "version_dir": version_dir,
-        "approved": approved, "fairness": fairness_result,
+        "version_id": version_id,
+        "version_dir": version_dir,
+        "approved": approved,
+        "fairness": fairness_result,
     }
 
 
 if __name__ == "__main__":
+    import logging_config  # noqa: F401  (configura el formato/nivel de logging al correr como script)
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--company-id", type=int, required=True)
     parser.add_argument("--dataset-id", type=int, required=True)
@@ -99,7 +115,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     result = train_for_company(
-        args.company_id, args.dataset_id, args.algorithm, args.timesteps, args.fairness_penalty_weight,
+        args.company_id,
+        args.dataset_id,
+        args.algorithm,
+        args.timesteps,
+        args.fairness_penalty_weight,
     )
     estado = "APROBADA y promovida" if result["approved"] else "guardada pero NO promovida (falló equidad)"
-    print(f"Versión {result['version_id']} {estado}. Detalle de equidad: {result['fairness']}")
+    logger.info("Versión %s %s. Detalle de equidad: %s", result["version_id"], estado, result["fairness"])

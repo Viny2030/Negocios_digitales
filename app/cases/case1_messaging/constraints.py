@@ -9,6 +9,7 @@ Resuelve un LP de selección binaria (PuLP) entre los touchpoints factibles: exa
 el mismo patrón que app/cases/case2_pricing/constraints.py, pero acá el LP elige una
 acción discreta en vez de un precio continuo.
 """
+
 import pulp
 
 from app.cases.case1_messaging.schemas import ChannelBudget, ProspectProfile, Touchpoint

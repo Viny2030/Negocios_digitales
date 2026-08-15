@@ -1,5 +1,6 @@
 """Modelo de Dataset subido por una empresa para un caso (1, 2 o 3).
 El archivo físico (csv/parquet) se guarda en DATASETS_DIR y se referencia por path."""
+
 import datetime as dt
 import enum
 
@@ -13,6 +14,7 @@ class CaseType(str, enum.Enum):
     case1_messaging = "case1_messaging"
     case2_pricing = "case2_pricing"
     case3_anomaly = "case3_anomaly"
+    case4_accelerator = "case4_accelerator"
 
 
 class DatasetStatus(str, enum.Enum):
@@ -34,6 +36,6 @@ class Dataset(Base):
     row_count = Column(Integer, default=0)
     columns_schema = Column(Text, nullable=True)  # JSON con nombres/tipos de columnas detectadas
     status = Column(Enum(DatasetStatus), default=DatasetStatus.uploaded)
-    created_at = Column(DateTime, default=lambda: dt.datetime.now(dt.timezone.utc))
+    created_at = Column(DateTime, default=lambda: dt.datetime.now(dt.UTC))
 
     company = relationship("Company", back_populates="datasets")

@@ -1,4 +1,5 @@
 """Esquemas Pydantic compartidos: empresas y datasets."""
+
 import datetime as dt
 
 from pydantic import BaseModel, ConfigDict, EmailStr

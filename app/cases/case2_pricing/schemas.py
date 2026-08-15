@@ -6,6 +6,7 @@ Acciones (A): precio continuo dentro de banda permitida (multiplicador 1.0x-2.5x
 Recompensa (R): revenue neto - penalización de margen - penalización de equidad (Demographic Parity).
 Caso canónico del Anexo I (H1, OP1, OP2).
 """
+
 from pydantic import BaseModel, Field
 
 

@@ -1,4 +1,5 @@
-﻿"""Router raíz de la API v1: agrega endpoints comunes (empresas, datasets) y los 4 casos."""
+"""Router raíz de la API v1: agrega endpoints comunes (empresas, datasets) y los 4 casos."""
+
 from fastapi import APIRouter
 
 from app.api.v1.endpoints import companies, datasets

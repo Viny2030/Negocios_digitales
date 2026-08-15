@@ -1,11 +1,12 @@
 """Lógica de negocio del Caso 2.1: infiere el precio RL y aplica el filtro de factibilidad."""
+
 import time
 
 import model_registry
-from config import get_settings
 from app.cases.case2_pricing.constraints import apply_feasibility_filter
 from app.cases.case2_pricing.policy import PricingPolicy
 from app.cases.case2_pricing.schemas import PriceRequest, PriceResponse
+from config import get_settings
 
 settings = get_settings()
 CASE = "case2_pricing"
@@ -20,7 +21,7 @@ def _get_policy_for_company(company_id: int) -> PricingPolicy:
     current_version_id = model_registry.get_current_version_id(settings.MODELS_DIR, company_id, CASE)
     cached = _policy_cache.get(company_id)
     if cached is None or cached[0] != current_version_id:
-        # Sirve la última versión aprobada por el registro (ver app/core/model_registry.py);
+        # Sirve la última versión aprobada por el registro (ver model_registry.py);
         # si ninguna fue promovida todavía (o falló el filtro de equidad), model_path queda
         # en None y PricingPolicy cae a su heurística de respaldo.
         model_path = model_registry.get_current_artifact_path(settings.MODELS_DIR, company_id, CASE, "model.zip")

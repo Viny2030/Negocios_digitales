@@ -1,0 +1,11 @@
+# Normaliza los finales de línea a LF en el repo (independientemente del OS del
+# desarrollador), para evitar diffs ruidosos donde el único cambio real es CRLF<->LF.
+* text=auto eol=lf
+
+# Binarios: no tocar finales de línea ni intentar diff de texto.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.zip binary
+*.db binary
+*.joblib binary

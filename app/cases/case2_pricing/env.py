@@ -3,6 +3,7 @@ Entorno Gymnasium para el agente de pricing dinámico (Caso 2.1). Uso: entrenami
 (scripts/train_case2.py), calibrado con datasets de la empresa (ventas, inventario, costos)
 combinados con fuentes públicas de referencia (Inside Airbnb, Expedia) para elasticidad.
 """
+
 import numpy as np
 
 try:
@@ -25,8 +26,14 @@ class PricingEnv(gym.Env if gym else object):
 
     metadata = {"render_modes": []}
 
-    def __init__(self, historical_df=None, min_multiplier: float = 1.0, max_multiplier: float = 2.5,
-                 fairness_penalty_weight: float = 1.0, max_steps: int = 100):
+    def __init__(
+        self,
+        historical_df=None,
+        min_multiplier: float = 1.0,
+        max_multiplier: float = 2.5,
+        fairness_penalty_weight: float = 1.0,
+        max_steps: int = 100,
+    ):
         super().__init__()
         self.historical_df = historical_df
         self.min_multiplier = min_multiplier

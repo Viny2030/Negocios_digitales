@@ -14,6 +14,10 @@ def test_alert_webhook_returns_decision(client, company_api_key):
     body = resp.json()
     assert body["alert_id"] == "alert-1"
     assert body["action"] in [
-        "ignore", "investigate_light", "investigate_deep",
-        "escalate_engineering", "escalate_business", "merge_related",
+        "ignore",
+        "investigate_light",
+        "investigate_deep",
+        "escalate_engineering",
+        "escalate_business",
+        "merge_related",
     ]

@@ -16,13 +16,16 @@ exactamente, no se aproxima. Con el objetivo lineal y sin tope de concentración
 comportamiento que el enunciado espera que el agente aprenda por sobre la
 distribución uniforme.
 """
+
 import pulp
 
 from app.cases.case4_accelerator.schemas import ResourcePool, StartupAllocation, StartupProfile
 
 
 def _allocate_continuous_resource(
-    value_scores: dict[str, float], total_available: float, max_share_per_startup: float,
+    value_scores: dict[str, float],
+    total_available: float,
+    max_share_per_startup: float,
 ) -> dict[str, float]:
     """LP: maximizar sum(value_i * x_i) sujeto a sum(x_i) <= total_available y
     0 <= x_i <= max_share_per_startup * total_available (tope de concentración).
@@ -73,7 +76,9 @@ def apply_portfolio_allocation(
     applied: list[str] = ["lp_asignacion_presupuesto_mentoria"]
 
     mentorship = _allocate_continuous_resource(
-        value_scores, resources.mentorship_hours_available, resources.max_mentorship_share_per_startup,
+        value_scores,
+        resources.mentorship_hours_available,
+        resources.max_mentorship_share_per_startup,
     )
     if resources.max_mentorship_share_per_startup < 1.0:
         applied.append("tope_concentracion_mentoria")
@@ -81,7 +86,9 @@ def apply_portfolio_allocation(
     capital = {sid: 0.0 for sid in value_scores}
     if resources.followon_capital_available > 0:
         capital = _allocate_continuous_resource(
-            value_scores, resources.followon_capital_available, resources.max_capital_share_per_startup,
+            value_scores,
+            resources.followon_capital_available,
+            resources.max_capital_share_per_startup,
         )
         applied.append("lp_asignacion_presupuesto_capital")
         if resources.max_capital_share_per_startup < 1.0:

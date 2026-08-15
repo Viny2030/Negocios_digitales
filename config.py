@@ -2,7 +2,9 @@
 Configuración centralizada del proyecto.
 Lee variables de entorno (ver .env.example) usando pydantic-settings.
 """
+
 from functools import lru_cache
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -27,7 +29,7 @@ class Settings(BaseSettings):
 
     CORS_ORIGINS: list[str] = ["*"]
 
-    # Broker/backend de Celery (cola real de entrenamiento, ver app/core/celery_app.py).
+    # Broker/backend de Celery (cola real de entrenamiento, ver celery_app.py).
     # En docker-compose apunta al servicio `redis`; en local, requiere un Redis corriendo
     # (Docker, WSL, o Memurai en Windows) en este mismo host y puerto.
     REDIS_URL: str = "redis://localhost:6379/0"
@@ -36,6 +38,13 @@ class Settings(BaseSettings):
     # segmentos supera este umbral tras entrenar, el modelo se guarda como versión pero
     # NO se promueve a producción (sigue sirviendo la versión anterior aprobada).
     FAIRNESS_DP_THRESHOLD: float = 0.10
+
+    # Ticketing (case3 - anomaly triage): URL de un webhook genérico (Jira/Opsgenie/Zendesk
+    # automation webhook, o un endpoint intermedio propio) al que se le hace POST con el ticket
+    # a crear. Si queda vacío, no se crea ningún ticket real y solo se deja constancia en el log
+    # (útil en desarrollo/demo, donde la empresa todavía no configuró su integración).
+    TICKETING_WEBHOOK_URL: str = ""
+    TICKETING_WEBHOOK_TIMEOUT_S: float = 5.0
 
 
 @lru_cache

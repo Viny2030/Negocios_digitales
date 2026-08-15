@@ -3,3 +3,18 @@
 __pycache__/
 *.pyc
 *.db
+
+# Datasets subidos por las empresas y artefactos de modelos entrenados (ver DATASETS_DIR /
+# MODELS_DIR en config.py). Son datos de runtime específicos de cada instalación -- no
+# pertenecen al repo. Se mantiene la estructura de carpetas vía .gitkeep para que un clone
+# nuevo ya tenga estos directorios listos (evita errores de "No such file or directory" antes
+# de la primera subida/entrenamiento).
+storage/datasets/*
+storage/models/*
+!storage/datasets/.gitkeep
+!storage/models/.gitkeep
+
+.env
+.ruff_cache/
+.pytest_cache/
+*.egg-info/

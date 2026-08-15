@@ -1,4 +1,5 @@
 """Wrapper de la política RL de triaje (DQN sobre cola priorizada), con fallback heurístico."""
+
 import os
 
 from app.cases.case3_anomaly.encoding import payload_to_vector
@@ -25,10 +26,15 @@ class AnomalyTriagePolicy:
             return TriageAction.investigate_deep
         if abs(payload.z_score) > 2:
             return TriageAction.investigate_light
-        return TriageAction.merge_related if payload.historical_similar_count > 3 else TriageAction.investigate_light
+        return (
+            TriageAction.merge_related if payload.historical_similar_count > 3 else TriageAction.investigate_light
+        )
 
     def decide(
-        self, payload: AlertWebhookPayload, capacity: TeamCapacity, fp_proba: float,
+        self,
+        payload: AlertWebhookPayload,
+        capacity: TeamCapacity,
+        fp_proba: float,
     ) -> tuple[TriageAction, float]:
         if self.model is None:
             action = self._heuristic(payload, capacity, fp_proba)

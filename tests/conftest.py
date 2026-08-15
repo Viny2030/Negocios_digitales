@@ -2,7 +2,7 @@
 Fixtures compartidas de test.
 
 IMPORTANTE: seteamos DATABASE_URL a un archivo en /tmp ANTES de importar app.main, porque
-app.core.database crea el engine de produccion una sola vez al importarse (a nivel de modulo).
+database crea el engine de produccion una sola vez al importarse (a nivel de modulo).
 Si se deja el default relativo ("./prescriptive.db"), sqlite intenta abrirlo en el cwd del
 proceso de test, que puede estar en un filesystem sincronizado sin soporte de locking (esto
 causaba "disk I/O error" en este sandbox). Ese engine de produccion solo se usa en el evento
@@ -11,6 +11,7 @@ de startup (init_db); las queries reales de cada test van por el engine de test 
 Ademas, cada test recibe su propia base SQLite aislada sobreescribiendo la dependency
 `get_db` (patron estandar de FastAPI), en vez de depender de mas variables de entorno.
 """
+
 import os
 import tempfile
 
@@ -25,8 +26,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from database import Base, get_db
 from app.main import app
+from database import Base, get_db
 
 
 @pytest.fixture()

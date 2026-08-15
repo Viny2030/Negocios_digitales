@@ -5,28 +5,32 @@ alertas resueltas para case3). El archivo se guarda en disco y se registra en la
 luego los scripts de entrenamiento (scripts/train_case*.py) o el endpoint /train
 de cada caso lo toman como fuente para (re)entrenar el modelo de ESA empresa.
 """
+
 import json
 import os
 import uuid
 
 import pandas as pd
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from sqlalchemy.orm import Session
 
-from config import get_settings
-from database import get_db
-from security import get_current_company
 from app.models.company import Company
 from app.models.dataset import CaseType, Dataset, DatasetStatus
 from app.schemas.common import DatasetOut
+from config import get_settings
+from database import get_db
+from rate_limit import limiter
+from security import get_current_company
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
 settings = get_settings()
 
 
 @router.post("/{case}", response_model=DatasetOut, status_code=201)
+@limiter.limit("10/minute")
 def upload_dataset(
     case: CaseType,
+    request: Request,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     company: Company = Depends(get_current_company),

@@ -15,6 +15,7 @@ política (RL) y consulta decisiones prescriptivas en tiempo real.
 | 1.1 | Secuenciación de mensajes multicanal | `POST /api/v1/case1/recommend-next-touchpoint` | DQN / PPO |
 | 2.1 | Pricing dinámico con restricciones de equidad | `POST /api/v1/case2/get-price` | PPO/DQN + LP (PuLP) + Fairlearn |
 | 3.3 | Triaje y priorización de anomalías | `POST /api/v1/case3/alert-webhook` | Clasificador auxiliar (RandomForest) + DQN |
+| 6.2 | Asignación de recursos en aceleradora/incubadora | `POST /api/v1/case4/allocate` | PPO + LP (PuLP, knapsack de portfolio) |
 
 Cada caso sigue el mismo patrón interno (`app/cases/<caso>/`):
 
@@ -37,8 +38,9 @@ Esto significa que **no hace falta un repo por empresa**: es una sola plataforma
 ## Estructura del repositorio
 
 ```
+config.py, database.py, security.py   # config, DB (SQLAlchemy), autenticación por API key
+celery_app.py, model_registry.py      # cola de entrenamiento (Celery) y versionado de modelos
 app/
-  core/          # config, DB (SQLAlchemy), autenticación por API key
   models/        # ORM: Company, Dataset
   schemas/       # Pydantic compartidos
   api/v1/        # router raíz + endpoints de companies y datasets
@@ -46,15 +48,19 @@ app/
     case1_messaging/
     case2_pricing/
     case3_anomaly/
+    case4_accelerator/
   main.py        # instancia FastAPI, monta todos los routers
 scripts/
-  train_case1.py train_case2.py train_case3.py   # entrenamiento offline por empresa
+  train_case1.py train_case2.py train_case3.py train_case4.py   # entrenamiento offline por empresa
 tests/
-  test_case1.py test_case2.py test_case3.py test_datasets.py
+  test_case1.py test_case2.py test_case3.py test_case4.py test_datasets.py test_encoding.py
 requirements.txt
 Dockerfile / docker-compose.yml
 .env.example
 ```
+
+> Nota: `config.py`, `database.py`, `security.py`, `celery_app.py` y `model_registry.py` viven
+> en la raíz del repo (no en `app/core/`, pese a lo que puedan sugerir comentarios viejos).
 
 ## Cómo correrlo
 
@@ -71,6 +77,29 @@ O con Docker (incluye Postgres):
 ```bash
 docker compose up --build
 ```
+
+## Migraciones (Alembic)
+
+El primer `uvicorn app.main:app` corre `init_db()` (`Base.metadata.create_all`), que alcanza
+para arrancar en limpio. Pero **no versiona cambios de esquema**: si ya tenés una base con
+datos (empresas, datasets, modelos registrados) y modificás un modelo en `app/models/`,
+`create_all` no va a alterar la tabla existente. A partir de ahí, usar Alembic:
+
+```bash
+# Aplicar todas las migraciones pendientes (incluye la inicial: companies + datasets)
+alembic upgrade head
+
+# Después de modificar un modelo en app/models/, generar la migración correspondiente
+alembic revision --autogenerate -m "descripción del cambio"
+# revisar el archivo generado en alembic/versions/ antes de aplicarlo
+alembic upgrade head
+
+# Volver atrás un paso
+alembic downgrade -1
+```
+
+`alembic/env.py` ya está cableado a `settings.DATABASE_URL` (mismo `.env` que usa la API), así
+que no hace falta tocar `alembic.ini` para apuntar a otra base.
 
 ## Cómo entrenar un caso para una empresa
 

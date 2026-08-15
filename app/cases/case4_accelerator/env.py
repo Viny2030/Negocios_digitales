@@ -10,6 +10,7 @@ Uso: entrenamiento offline (scripts/train_case4.py), calibrado con datasets de
 portfolios históricos de aceleradoras (Crunchbase, YC/500 Startups open data,
 Endeavor LatAm) o con portfolios sintéticos heterogéneos.
 """
+
 import numpy as np
 
 try:
@@ -20,7 +21,12 @@ except ImportError:
     spaces = None
 
 from app.cases.case4_accelerator.constraints import apply_portfolio_allocation
-from app.cases.case4_accelerator.encoding import MAX_STARTUPS, STATE_DIM, portfolio_to_vector, sample_portfolio_from_df
+from app.cases.case4_accelerator.encoding import (
+    MAX_STARTUPS,
+    STATE_DIM,
+    portfolio_to_vector,
+    sample_portfolio_from_df,
+)
 from app.cases.case4_accelerator.schemas import ResourcePool
 
 
@@ -85,8 +91,7 @@ class AcceleratorEnv(gym.Env if gym else object):
         self._step_count += 1
 
         value_scores = {
-            startup.startup_id: float(np.clip(score, 0.0, 1.0))
-            for startup, score in zip(self._portfolio, action)
+            startup.startup_id: float(np.clip(score, 0.0, 1.0)) for startup, score in zip(self._portfolio, action)
         }
         allocations, _ = apply_portfolio_allocation(value_scores, self._portfolio, self._resources)
 
@@ -104,7 +109,9 @@ class AcceleratorEnv(gym.Env if gym else object):
                 allocation.mentorship_hours / 20.0 + allocation.followon_capital_recommended / 50_000.0
             )
             portfolio_return += fundamentals * resource_intensity
-            resource_cost += 0.01 * allocation.mentorship_hours + 0.000005 * allocation.followon_capital_recommended
+            resource_cost += (
+                0.01 * allocation.mentorship_hours + 0.000005 * allocation.followon_capital_recommended
+            )
 
         reward = portfolio_return - resource_cost
         terminated = self._step_count >= self.max_steps

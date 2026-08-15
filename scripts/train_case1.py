@@ -1,7 +1,7 @@
 """
 Entrenamiento offline del Caso 1.1 (secuenciación de mensajes) para una empresa específica.
 Cada corrida genera una versión nueva en el registro de modelos (ver
-app/core/model_registry.py) y se promueve automáticamente a "current" (no hay filtro
+model_registry.py) y se promueve automáticamente a "current" (no hay filtro
 de equidad en este caso, a diferencia de case2).
 
 Uso manual:
@@ -9,18 +9,21 @@ Uso manual:
 
 También es invocado en background desde app/cases/case1_messaging/router.py (endpoint /train).
 """
+
 import argparse
+import logging
 import os
 
 import pandas as pd
 from sqlalchemy.orm import Session
 
-from app.cases.case1_messaging.env import MessagingSequencingEnv
 import model_registry
+from app.cases.case1_messaging.env import MessagingSequencingEnv
+from app.models.dataset import Dataset
 from config import get_settings
 from database import SessionLocal
-from app.models.dataset import Dataset
 
+logger = logging.getLogger(__name__)
 settings = get_settings()
 CASE = "case1_messaging"
 
@@ -50,8 +53,12 @@ def train_for_company(company_id: int, dataset_id: int, algorithm: str = "dqn", 
 
     metrics = {"algorithm": algorithm, "timesteps": timesteps, "approved": True}
     version_dir = model_registry.save_version(
-        settings.MODELS_DIR, company_id, CASE, version_id,
-        artifacts={"model.zip": tmp_path}, metrics=metrics,
+        settings.MODELS_DIR,
+        company_id,
+        CASE,
+        version_id,
+        artifacts={"model.zip": tmp_path},
+        metrics=metrics,
     )
     model_registry.promote(settings.MODELS_DIR, company_id, CASE, version_id)
 
@@ -59,6 +66,8 @@ def train_for_company(company_id: int, dataset_id: int, algorithm: str = "dqn", 
 
 
 if __name__ == "__main__":
+    import logging_config  # noqa: F401  (configura el formato/nivel de logging al correr como script)
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--company-id", type=int, required=True)
     parser.add_argument("--dataset-id", type=int, required=True)
@@ -67,4 +76,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     result = train_for_company(args.company_id, args.dataset_id, args.algorithm, args.timesteps)
-    print(f"Versión {result['version_id']} guardada y promovida en: {result['version_dir']}")
+    logger.info("Versión %s guardada y promovida en: %s", result["version_id"], result["version_dir"])

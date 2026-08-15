@@ -10,6 +10,7 @@ estado — el vector original de policy.py recibía ese parámetro pero nunca lo
 modelo ya entrenado con la versión vieja; si se quiere incorporar, es un cambio de
 `STATE_DIM` que requiere reentrenar desde cero, no un parche silencioso.
 """
+
 import datetime as dt
 
 import numpy as np
@@ -24,14 +25,17 @@ def payload_to_vector(payload: AlertWebhookPayload, capacity: TeamCapacity) -> n
     """Vector de estado (S): [z_score_norm, tiempo_transcurrido_norm(placeholder),
     frecuencia_mensual_norm, horas_analista_disponibles_norm, alertas_pendientes_norm,
     impacto_estimado_norm]."""
-    return np.array([
-        min(abs(payload.z_score) / 5.0, 1.0),
-        0.0,  # tiempo transcurrido: se puede derivar de triggered_at vs. now (ver TODO abajo)
-        min(payload.historical_similar_count / 20.0, 1.0),
-        min(capacity.analyst_hours_available / 8.0, 1.0),
-        min(capacity.pending_alerts_in_queue / 50.0, 1.0),
-        min((payload.estimated_financial_impact or 0) / 10000.0, 1.0),
-    ], dtype=np.float32)
+    return np.array(
+        [
+            min(abs(payload.z_score) / 5.0, 1.0),
+            0.0,  # tiempo transcurrido: se puede derivar de triggered_at vs. now (ver TODO abajo)
+            min(payload.historical_similar_count / 20.0, 1.0),
+            min(capacity.analyst_hours_available / 8.0, 1.0),
+            min(capacity.pending_alerts_in_queue / 50.0, 1.0),
+            min((payload.estimated_financial_impact or 0) / 10000.0, 1.0),
+        ],
+        dtype=np.float32,
+    )
 
 
 def record_to_payload(record: dict) -> AlertWebhookPayload:
@@ -43,8 +47,11 @@ def record_to_payload(record: dict) -> AlertWebhookPayload:
         pct_change = None
 
     estimated_financial_impact = record.get("estimated_financial_impact")
-    if estimated_financial_impact is not None and isinstance(estimated_financial_impact, float) \
-            and pd.isna(estimated_financial_impact):
+    if (
+        estimated_financial_impact is not None
+        and isinstance(estimated_financial_impact, float)
+        and pd.isna(estimated_financial_impact)
+    ):
         estimated_financial_impact = None
 
     return AlertWebhookPayload(
@@ -52,7 +59,7 @@ def record_to_payload(record: dict) -> AlertWebhookPayload:
         metric_name=str(record.get("metric_name", "unknown")),
         z_score=float(record.get("z_score", 0.0) or 0.0),
         pct_change=pct_change,
-        triggered_at=record.get("triggered_at") or dt.datetime.now(dt.timezone.utc),
+        triggered_at=record.get("triggered_at") or dt.datetime.now(dt.UTC),
         business_context=record.get("business_context"),
         historical_similar_count=int(record.get("historical_similar_count", 0) or 0),
         estimated_financial_impact=estimated_financial_impact,

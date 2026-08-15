@@ -17,6 +17,7 @@ Cada versión queda guardada siempre, incluso si no se promueve (por ejemplo, si
 el filtro de equidad de case2): así queda constancia de qué se entrenó y por qué se
 rechazó, y la versión anterior sigue sirviendo hasta que una nueva la reemplace.
 """
+
 import datetime as dt
 import json
 import os
@@ -37,13 +38,17 @@ def _current_pointer_path(models_dir: str, company_id: int, case: str) -> str:
 
 def new_version_id(algorithm: str = "model") -> str:
     """Identificador único y ordenable cronológicamente: 20260727T143000123456Z_ppo."""
-    ts = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    ts = dt.datetime.now(dt.UTC).strftime("%Y%m%dT%H%M%S%fZ")
     return f"{ts}_{algorithm.lower()}"
 
 
 def save_version(
-    models_dir: str, company_id: int, case: str, version_id: str,
-    artifacts: dict[str, str], metrics: dict,
+    models_dir: str,
+    company_id: int,
+    case: str,
+    version_id: str,
+    artifacts: dict[str, str],
+    metrics: dict,
 ) -> str:
     """Crea la carpeta de la versión, mueve los artefactos entrenados (ya escritos en disco,
     p.ej. por `model.save(tmp_path)`) a su ubicación final dentro de la versión, y escribe
@@ -63,7 +68,7 @@ def save_version(
         "version_id": version_id,
         "case": case,
         "company_id": company_id,
-        "created_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "created_at": dt.datetime.now(dt.UTC).isoformat(),
         "artifacts": saved_names,
         "metrics": metrics,
     }
@@ -79,7 +84,7 @@ def promote(models_dir: str, company_id: int, case: str, version_id: str) -> Non
     if not os.path.isdir(vdir):
         raise ValueError(f"Versión '{version_id}' no existe para company_id={company_id}, case={case}")
 
-    pointer = {"version_id": version_id, "promoted_at": dt.datetime.now(dt.timezone.utc).isoformat()}
+    pointer = {"version_id": version_id, "promoted_at": dt.datetime.now(dt.UTC).isoformat()}
     case_dir = _case_dir(models_dir, company_id, case)
     os.makedirs(case_dir, exist_ok=True)
     with open(_current_pointer_path(models_dir, company_id, case), "w", encoding="utf-8") as f:
