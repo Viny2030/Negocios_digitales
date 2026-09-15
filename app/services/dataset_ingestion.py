@@ -64,6 +64,7 @@ EXPECTED_COLUMNS: dict[CaseType, set[str]] = {
         "pct_change",
         "historical_similar_count",
         "estimated_financial_impact",
+        "is_false_positive",
     },
     CaseType.case4_accelerator: {
         "startup_id",

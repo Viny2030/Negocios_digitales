@@ -31,14 +31,18 @@ CASE = "case3_anomaly"
 
 def _train_fp_classifier(historical_df: pd.DataFrame, tmp_dir: str) -> str | None:
     """Espera columnas: z_score, pct_change, historical_similar_count, estimated_financial_impact,
-    label (1 = false_positive, 0 = real_incident). Si el dataset no trae `label`, se omite este paso."""
-    if "label" not in historical_df.columns:
+    is_false_positive (1 = false_positive, 0 = real_incident). Acepta `label` como alias
+    legado de `is_false_positive` (nombre viejo de esta misma columna, ver
+    generate_synthetic_data.py) para no romper datasets que una empresa ya haya subido
+    con el nombre anterior. Si el dataset no trae ninguna de las dos, se omite este paso."""
+    label_col = "is_false_positive" if "is_false_positive" in historical_df.columns else "label"
+    if label_col not in historical_df.columns:
         return None
 
     feature_cols = ["z_score", "pct_change", "historical_similar_count", "estimated_financial_impact"]
     available_cols = [c for c in feature_cols if c in historical_df.columns]
     X = historical_df[available_cols].fillna(0)
-    y = historical_df["label"]
+    y = historical_df[label_col]
 
     X_train, _, y_train, _ = train_test_split(X, y, test_size=0.2, random_state=42)
     clf = RandomForestClassifier(n_estimators=200, random_state=42)

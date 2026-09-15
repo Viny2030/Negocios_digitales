@@ -39,11 +39,17 @@ class AcceleratorEnv(gym.Env if gym else object):
     startup — el LP de constraints.py traduce esos scores en la asignación real de
     recursos, igual que en producción (service.py).
     Recompensa (R): retorno simulado del portfolio neto del costo de recursos
-    asignados. La dinámica de retorno de acá abajo es un placeholder deliberado
-    (igual que en los otros 3 casos): calibrarla con retorno real observado
-    (exits, follow-on rounds, supervivencia a 18 meses) es trabajo de datos que
-    depende del dataset histórico real de cada aceleradora, no de la arquitectura
-    del entorno.
+    asignados. La dinámica de retorno de acá abajo sigue siendo un placeholder --
+    calibrarla con retorno real observado (exits, follow-on rounds, supervivencia a
+    18 meses) es trabajo de datos que depende del dataset histórico real de cada
+    aceleradora -- pero ya usa TODAS las columnas del `StartupProfile`, no solo
+    tracción/equipo/mercado: `past_response_score` (qué tan bien historicamente
+    aprovechó el apoyo recibido) amplifica o atenúa el retorno; el apoyo YA recibido
+    el período pasado (`mentorship_hours_received_last_period`,
+    `followon_capital_received_last_period`) genera retornos decrecientes sobre el
+    apoyo nuevo (a un startup que ya venía muy apoyado, lo mismo de nuevo le rinde
+    menos); y un `runway_months` bajo agrega un pequeño bonus al capital asignado
+    (ese capital puede ser la diferencia entre sobrevivir o no).
     """
 
     metadata = {"render_modes": []}
@@ -108,7 +114,29 @@ class AcceleratorEnv(gym.Env if gym else object):
             resource_intensity = np.tanh(
                 allocation.mentorship_hours / 20.0 + allocation.followon_capital_recommended / 50_000.0
             )
-            portfolio_return += fundamentals * resource_intensity
+
+            # Retornos decrecientes: si YA recibió mucho apoyo el período pasado, el
+            # mismo monto ahora rinde menos (evita que el LP concentre todo siempre en
+            # el mismo startup período tras período sin límite).
+            prior_support = np.tanh(
+                startup.mentorship_hours_received_last_period / 40.0
+                + startup.followon_capital_received_last_period / 100_000.0
+            )
+            saturation = float(np.clip(1.0 - 0.5 * prior_support, 0.5, 1.0))
+
+            # Qué tan bien este startup aprovechó históricamente el apoyo recibido:
+            # amplifica el retorno de los que respondieron bien, lo atenúa (no lo anula)
+            # en los que no.
+            responsiveness = 0.5 + 0.5 * startup.past_response_score
+
+            portfolio_return += fundamentals * resource_intensity * responsiveness * saturation
+
+            # Urgencia de runway: con poco runway, el capital asignado AHORA vale más
+            # (puede ser la diferencia entre sobrevivir o no) -- bonus chico y acotado,
+            # solo sobre el capital, no sobre mentoría.
+            runway_urgency = float(np.clip(1.0 - startup.runway_months / 12.0, 0.0, 0.5))
+            portfolio_return += runway_urgency * min(allocation.followon_capital_recommended / 50_000.0, 1.0) * 0.3
+
             resource_cost += (
                 0.01 * allocation.mentorship_hours + 0.000005 * allocation.followon_capital_recommended
             )

@@ -4,6 +4,8 @@ Entorno Gymnasium para el agente de pricing dinámico (Caso 2.1). Uso: entrenami
 combinados con fuentes públicas de referencia (Inside Airbnb, Expedia) para elasticidad.
 """
 
+from collections import deque
+
 import numpy as np
 import pandas as pd
 
@@ -51,9 +53,24 @@ class PricingEnv(gym.Env if gym else object):
     muestreada del dataset histórico (antes esas columnas se codificaban en el estado
     pero no afectaban en nada la dinámica de compra simulada -- el dataset que subía la
     empresa cambiaba qué veía el agente, no qué aprendía de eso).
+
+    La penalización de equidad YA se aplica dentro del loop de entrenamiento (antes
+    quedaba fija en 0.0 acá, con un comentario diciendo "se calcula de forma agregada
+    en el training loop" que en realidad no pasaba en ningún lado): `step()` mantiene
+    una ventana móvil de tasa de rechazo (no-compra) por segmento y penaliza según la
+    brecha entre el segmento más y el menos rechazado, ver `_track_and_estimate_fairness_penalty`.
+    Es una señal barata y online -- NO reemplaza a `evaluate_fairness` (Fairlearn,
+    Demographic Parity real sobre todo el `historical_df`), que sigue siendo el gate
+    de aprobación después de entrenar (ver `scripts/train_case2.py`); esto solo le da
+    a la política una señal de equidad DURANTE el entrenamiento, no solo al final.
     """
 
     metadata = {"render_modes": []}
+
+    # Tamaño de la ventana móvil de rechazos por segmento (ver _track_and_estimate_fairness_penalty)
+    # y mínimo de muestras por segmento antes de confiar en su tasa de rechazo estimada.
+    _FAIRNESS_WINDOW = 200
+    _MIN_SAMPLES_PER_SEGMENT = 5
 
     def __init__(
         self,
@@ -75,8 +92,9 @@ class PricingEnv(gym.Env if gym else object):
         self._step_count = 0
         self._state = None
         self._current_row = None  # fila cruda de la transacción muestreada, para calibrar la demanda
-        # Registro de tasas de rechazo por segmento para medir Demographic Parity
-        self._rejection_by_segment: dict[str, list[int]] = {}
+        # Ventana móvil de resultados (1 = rechazo/no-compra, 0 = compra) por segmento,
+        # para estimar una Demographic Parity "en vivo" durante el entrenamiento.
+        self._rejection_by_segment: dict[str, deque] = {}
 
     def _sample_state(self):
         """Calibra el estado con una transacción real del dataset de la empresa (mismo
@@ -128,6 +146,27 @@ class PricingEnv(gym.Env if gym else object):
 
         return float(np.clip(price_effect * demand_factor * competitive_factor, 0.0, 1.0))
 
+    def _track_and_estimate_fairness_penalty(self, purchased: bool) -> float:
+        """Actualiza la ventana móvil de rechazo del segmento de `self._current_row` y
+        devuelve una estimación barata de Demographic Parity: la brecha entre la tasa
+        de rechazo (no-compra) del segmento más castigado y la del menos castigado,
+        entre los segmentos que ya tienen suficientes muestras (`_MIN_SAMPLES_PER_SEGMENT`)
+        en la ventana. 0.0 mientras no haya al menos 2 segmentos con muestra suficiente
+        -- evita penalizar por ruido al arranque del entrenamiento, antes de que haya
+        datos de más de un segmento."""
+        row = self._current_row
+        segment = str(row.get("user_segment") or "sin_segmento") if row is not None else "sin_segmento"
+
+        bucket = self._rejection_by_segment.setdefault(segment, deque(maxlen=self._FAIRNESS_WINDOW))
+        bucket.append(0 if purchased else 1)
+
+        ready = [b for b in self._rejection_by_segment.values() if len(b) >= self._MIN_SAMPLES_PER_SEGMENT]
+        if len(ready) < 2:
+            return 0.0
+
+        rejection_rates = [sum(b) / len(b) for b in ready]
+        return float(max(rejection_rates) - min(rejection_rates))
+
     def step(self, action):
         self._step_count += 1
         multiplier = float(np.clip(action[0], self.min_multiplier, self.max_multiplier))
@@ -139,12 +178,19 @@ class PricingEnv(gym.Env if gym else object):
         margin_ok = multiplier >= self.min_multiplier * 1.1
         margin_penalty = 0.0 if margin_ok else -1.0
 
-        # Penalización de equidad: si la tasa de rechazo difiere mucho entre segmentos (Demographic Parity)
-        fairness_penalty = 0.0  # se calcula de forma agregada en el training loop, ver scripts/train_case2.py
+        # Penalización de equidad: brecha de rechazo entre segmentos en la ventana móvil
+        # (Demographic Parity "en vivo" -- ver docstring de la clase y del método de arriba).
+        fairness_penalty = self._track_and_estimate_fairness_penalty(purchased)
 
-        reward = revenue + margin_penalty + self.fairness_penalty_weight * fairness_penalty
+        reward = revenue + margin_penalty - self.fairness_penalty_weight * fairness_penalty
         terminated = self._step_count >= self.max_steps
         truncated = False
 
         self._current_row, self._state = self._sample_state()
-        return self._state, reward, terminated, truncated, {"purchased": bool(purchased), "multiplier": multiplier}
+        return (
+            self._state,
+            reward,
+            terminated,
+            truncated,
+            {"purchased": bool(purchased), "multiplier": multiplier, "fairness_penalty": fairness_penalty},
+        )

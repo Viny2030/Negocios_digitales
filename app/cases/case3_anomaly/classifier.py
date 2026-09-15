@@ -1,7 +1,10 @@
 """
 Clasificador auxiliar (Caso 3.3): estima la probabilidad de que una alerta sea un falso
 positivo (ruido) vs. una anomalía real, ANTES de que el agente RL decida el curso de acción.
-Se entrena con logs históricos de tickets resueltos (columna label: real_incident/false_positive).
+Se entrena con logs históricos de tickets resueltos (columna `is_false_positive`:
+1 = false_positive, 0 = real_incident; se acepta `label` como alias legado -- ver
+scripts/train_case3.py._train_fp_classifier y app/cases/case3_anomaly/env.py, que leen
+la misma columna con el mismo fallback).
 """
 
 import os

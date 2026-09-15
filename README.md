@@ -20,7 +20,7 @@ política (RL) y consulta decisiones prescriptivas en tiempo real.
 Cada caso sigue el mismo patrón interno (`app/cases/<caso>/`):
 
 - `schemas.py` — contratos Pydantic (request/response), fieles al Estado(S)/Acción(A)/Recompensa(R) del documento fuente.
-- `env.py` — entorno Gymnasium para entrenamiento offline (no se usa en el request-path). En case1 y case2 la recompensa simulada ya se calibra con columnas reales del dataset histórico (tasa de respuesta y etapa del funnel en case1; `demand_index`, `user_segment` y `competitor_avg_price` en case2), no solo con el estado observado — case3 y case4 todavía usan un placeholder más simple (ver "Qué falta para producción").
+- `env.py` — entorno Gymnasium para entrenamiento offline (no se usa en el request-path). Los 4 casos ya calibran la recompensa simulada con columnas reales del dataset histórico, no solo con el estado observado: tasa de respuesta y etapa del funnel en case1; `demand_index`, `user_segment`, `competitor_avg_price` y una penalización de equidad "en vivo" por segmento en case2 (ver más abajo); la etiqueta real `is_false_positive`/`label` y `estimated_financial_impact` en case3; y en case4, además de tracción/equipo/mercado, `past_response_score`, el apoyo ya recibido el período pasado (con retornos decrecientes) y `runway_months` (bonus de urgencia sobre el capital asignado).
 - `policy.py` — carga el modelo `stable-baselines3` entrenado de la empresa; si no existe aún, aplica una **heurística de respaldo** para que el endpoint funcione desde el día 1.
 - `service.py` — orquesta clasificador/política/restricciones y arma la respuesta.
 - `router.py` — expone los endpoints FastAPI (`/recommend-...`, `/get-price`, `/alert-webhook`, `/train`).
@@ -87,6 +87,27 @@ python -m scripts.seed_dataset --company-id 1 --case case2_pricing --file synthe
 # Los 4 datasets sintéticos de una sola vez
 python -m scripts.seed_dataset --company-id 1 --all-synthetic
 ```
+
+### Datasets sintéticos (`generate_synthetic_data.py`)
+
+Regenera los 4 CSVs de `synthetic_data/` desde cero (`python generate_synthetic_data.py`).
+Pensados para poder probar casos límite del negocio sin depender de tener datos reales de
+una empresa todavía:
+
+- **case2_pricing**: `min_margin_pct` ya no es fijo (`0.10` para todas las filas) — varía
+  por fila (`0.10`/`0.15`/`0.20`/`0.45`/`0.60`, con más peso en el extremo bajo), para poder
+  ejercitar el caso límite en el que el margen mínimo exigido supera el multiplicador
+  techo (`max_multiplier`) y el filtro de factibilidad LP (`constraints.py`) tiene que
+  recortar la recomendación en vez de dejarla pasar siempre sin tocar.
+- **case3_anomaly**: la columna de etiqueta se renombró de `label` a `is_false_positive`
+  (mismo significado: `1` = falso positivo, `0` = incidente real) para que el nombre diga
+  qué es, no un genérico "label". `env.py`, `classifier.py` y `train_case3.py` siguen
+  aceptando `label` como alias legado, así que un dataset ya subido por una empresa con el
+  nombre viejo no se rompe.
+- **case4_accelerator**: el portfolio sintético pasó de 60 a 200 startups, para tener
+  variedad suficiente al muestrear portfolios de `MAX_STARTUPS=15` (`encoding.py`) y
+  ejercitar mejor la lógica de asignación por fundamentals/apoyo previo/urgencia de runway
+  del entorno (ver arriba).
 
 ## Estructura del repositorio
 
@@ -194,5 +215,3 @@ curl -X POST localhost:8000/api/v1/case2/get-price -H "X-API-Key: <API_KEY>" \
 - Evaluación automática de Demographic Parity (Fairlearn) como gate antes de promover un modelo de pricing a producción.
 - Autenticación más robusta (rotación de API keys, rate limiting por empresa).
 - Panel/frontend para que la empresa suba datasets y vea métricas (fuera del alcance de este repo backend).
-- Calibrar la recompensa de case3 (triaje de anomalías) y case4 (asignación de recursos) con datos reales de la empresa, igual que ya se hizo para case1 y case2 (ver sección de arriba) -- hoy siguen usando placeholders más simples.
-- Agregación real de la penalización de equidad dentro de `PricingEnv.step` (hoy queda en 0.0 a propósito; `evaluate_fairness` se corre aparte, después de entrenar, ver `scripts/train_case2.py`).
