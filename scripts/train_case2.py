@@ -47,6 +47,10 @@ def train_for_company(
         if not dataset:
             raise ValueError(f"Dataset {dataset_id} no encontrado para company_id={company_id}")
         historical_df = pd.read_csv(dataset.file_path)
+        # Se capturan antes de cerrar la sesión: quedan en `metrics` para poder trazar con qué
+        # dataset exacto (id + hash de contenido) se entrenó esta versión de modelo.
+        dataset_content_hash = dataset.content_hash
+        dataset_row_count = dataset.row_count
     finally:
         db.close()
 
@@ -74,6 +78,9 @@ def train_for_company(
         "fairness": fairness_result,
         "fairness_threshold": settings.FAIRNESS_DP_THRESHOLD,
         "approved": approved,
+        "dataset_id": dataset_id,
+        "dataset_content_hash": dataset_content_hash,
+        "dataset_row_count": dataset_row_count,
     }
     version_dir = model_registry.save_version(
         settings.MODELS_DIR,

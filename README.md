@@ -20,7 +20,7 @@ política (RL) y consulta decisiones prescriptivas en tiempo real.
 Cada caso sigue el mismo patrón interno (`app/cases/<caso>/`):
 
 - `schemas.py` — contratos Pydantic (request/response), fieles al Estado(S)/Acción(A)/Recompensa(R) del documento fuente.
-- `env.py` — entorno Gymnasium para entrenamiento offline (no se usa en el request-path).
+- `env.py` — entorno Gymnasium para entrenamiento offline (no se usa en el request-path). En case1 y case2 la recompensa simulada ya se calibra con columnas reales del dataset histórico (tasa de respuesta y etapa del funnel en case1; `demand_index`, `user_segment` y `competitor_avg_price` en case2), no solo con el estado observado — case3 y case4 todavía usan un placeholder más simple (ver "Qué falta para producción").
 - `policy.py` — carga el modelo `stable-baselines3` entrenado de la empresa; si no existe aún, aplica una **heurística de respaldo** para que el endpoint funcione desde el día 1.
 - `service.py` — orquesta clasificador/política/restricciones y arma la respuesta.
 - `router.py` — expone los endpoints FastAPI (`/recommend-...`, `/get-price`, `/alert-webhook`, `/train`).
@@ -35,6 +35,59 @@ Cada caso sigue el mismo patrón interno (`app/cases/<caso>/`):
 
 Esto significa que **no hace falta un repo por empresa**: es una sola plataforma, aislada por `company_id` tanto en datos (`storage/datasets/<company_id>/...`) como en modelos.
 
+### Ciclo de vida de un dataset (upload, reemplazo, activación, borrado)
+
+Toda esta lógica vive en `app/services/dataset_ingestion.py` (compartida entre el
+router HTTP y `scripts/seed_dataset.py`, ver más abajo), no en el endpoint:
+
+- `POST /api/v1/datasets/{case}` — sube un archivo nuevo. Si su contenido (hash
+  sha256) es idéntico al de un dataset ya subido para esa empresa+caso, **no se
+  duplica**: se reactiva el existente y se devuelve ese mismo registro. Si el
+  contenido es distinto, se crea un dataset nuevo y queda marcado como el
+  **activo** para (empresa, caso) — desactivando cualquier otro que lo fuera antes.
+- `PUT /api/v1/datasets/{case}/{dataset_id}` — reemplaza el contenido de un dataset
+  ya subido, sobre el mismo `dataset_id` (a diferencia de `POST`, que siempre crea
+  uno nuevo o reactiva uno existente). Pensado para corregir un upload con datos
+  malos sin dejar "huérfano" el `dataset_id` si ya hay un modelo entrenado que lo
+  referencia en su metadata (`scripts/train_case{n}.py` graba `dataset_id` y
+  `dataset_content_hash` en cada versión, ver `model_registry.py`).
+- `POST /api/v1/datasets/{case}/{dataset_id}/activate` — marca un dataset anterior
+  como el vigente, sin volver a subir el archivo (por ejemplo, para "volver" a una
+  versión de datos previa).
+- `DELETE /api/v1/datasets/{case}/{dataset_id}` — borra el archivo y el registro.
+  Si era el dataset activo, (empresa, caso) queda sin dataset activo hasta que se
+  suba/active otro — no se reactiva ninguno automáticamente.
+- `GET /api/v1/datasets/{case}` — lista todos los datasets subidos para ese caso,
+  con su campo `is_active`.
+
+`is_active` es solo metadata para que la empresa sepa cuál es "el" dataset vigente
+entre varios subidos: **no** cambia qué usa `/train`, que sigue pidiendo
+`dataset_id` explícito.
+
+Tanto `POST` como `PUT` validan que el CSV traiga al menos un par de columnas
+esperadas para ESE caso (`EXPECTED_COLUMNS` en `dataset_ingestion.py`) antes de
+guardar nada: si no trae ninguna, la respuesta es `400` en vez de aceptarlo igual
+como "validated" (lo que pasaba antes si, por ejemplo, se subía por error el CSV de
+`case2_pricing` al endpoint de `case1_messaging`). El resto del pipeline sigue
+siendo tolerante a columnas faltantes puntuales (usa defaults, ver `record_to_*` en
+cada `encoding.py`) — esto solo corta el caso de "es claramente el dataset
+equivocado". Además, el archivo se guarda en streaming (sin cargar el upload entero
+en RAM antes de escribirlo), calculando hash y conteo de filas en la misma pasada.
+
+### Cargar datasets sin pasar por HTTP (desarrollo/tests)
+
+`scripts/seed_dataset.py` inserta un CSV local directo en `storage/datasets/` y la
+tabla `datasets`, sin levantar el server ni armar un `curl -F`. Útil para cargar los
+CSVs de `synthetic_data/` de una sola vez:
+
+```bash
+# Un caso puntual
+python -m scripts.seed_dataset --company-id 1 --case case2_pricing --file synthetic_data/case2_pricing.csv
+
+# Los 4 datasets sintéticos de una sola vez
+python -m scripts.seed_dataset --company-id 1 --all-synthetic
+```
+
 ## Estructura del repositorio
 
 ```
@@ -43,6 +96,7 @@ celery_app.py, model_registry.py      # cola de entrenamiento (Celery) y version
 app/
   models/        # ORM: Company, Dataset
   schemas/       # Pydantic compartidos
+  services/      # dataset_ingestion.py: guardado/hash/activación de datasets (usado por api/ y scripts/)
   api/v1/        # router raíz + endpoints de companies y datasets
   cases/
     case1_messaging/
@@ -52,6 +106,7 @@ app/
   main.py        # instancia FastAPI, monta todos los routers
 scripts/
   train_case1.py train_case2.py train_case3.py train_case4.py   # entrenamiento offline por empresa
+  seed_dataset.py                                                # carga de datasets sin pasar por HTTP
 tests/
   test_case1.py test_case2.py test_case3.py test_case4.py test_datasets.py test_encoding.py
 requirements.txt
@@ -86,7 +141,8 @@ datos (empresas, datasets, modelos registrados) y modificás un modelo en `app/m
 `create_all` no va a alterar la tabla existente. A partir de ahí, usar Alembic:
 
 ```bash
-# Aplicar todas las migraciones pendientes (incluye la inicial: companies + datasets)
+# Aplicar todas las migraciones pendientes (incluye la inicial: companies + datasets, y
+# la que agrega content_hash/is_active/updated_at a datasets)
 alembic upgrade head
 
 # Después de modificar un modelo en app/models/, generar la migración correspondiente
@@ -112,6 +168,9 @@ curl -X POST localhost:8000/api/v1/companies -H "Content-Type: application/json"
 curl -X POST localhost:8000/api/v1/datasets/case2_pricing \
   -H "X-API-Key: <API_KEY>" -F "file=@ventas_historicas.csv"
 
+# 2-bis) Alternativa sin HTTP para desarrollo/tests (ver sección de arriba):
+#   python -m scripts.seed_dataset --company-id <ID> --case case2_pricing --file ventas_historicas.csv
+
 # 3) Entrenar (o ejecutar el script directo)
 python -m scripts.train_case2 --company-id 1 --dataset-id 1 --algorithm ppo --timesteps 100000
 
@@ -129,9 +188,11 @@ curl -X POST localhost:8000/api/v1/case2/get-price -H "X-API-Key: <API_KEY>" \
 
 ## Qué falta para producción (pendiente, fuera del alcance del esqueleto)
 
-- Migraciones con Alembic en vez de `create_all` en el startup.
+- Migraciones con Alembic en vez de `create_all` en el startup para el arranque inicial (la carpeta `alembic/` ya existe y se usa para evolucionar el esquema, ver sección de arriba).
 - Cola real de entrenamiento (Celery/RQ) en vez de `BackgroundTasks` de FastAPI.
 - Integración real con Jira/Opsgenie/Zendesk en `case3_anomaly/service.py` (`_create_ticket_if_needed`).
 - Evaluación automática de Demographic Parity (Fairlearn) como gate antes de promover un modelo de pricing a producción.
 - Autenticación más robusta (rotación de API keys, rate limiting por empresa).
 - Panel/frontend para que la empresa suba datasets y vea métricas (fuera del alcance de este repo backend).
+- Calibrar la recompensa de case3 (triaje de anomalías) y case4 (asignación de recursos) con datos reales de la empresa, igual que ya se hizo para case1 y case2 (ver sección de arriba) -- hoy siguen usando placeholders más simples.
+- Agregación real de la penalización de equidad dentro de `PricingEnv.step` (hoy queda en 0.0 a propósito; `evaluate_fairness` se corre aparte, después de entrenar, ver `scripts/train_case2.py`).

@@ -58,6 +58,10 @@ def train_for_company(company_id: int, dataset_id: int, timesteps: int = 50_000)
         if not dataset:
             raise ValueError(f"Dataset {dataset_id} no encontrado para company_id={company_id}")
         historical_df = pd.read_csv(dataset.file_path)
+        # Se capturan antes de cerrar la sesión: quedan en `metrics` para poder trazar con qué
+        # dataset exacto (id + hash de contenido) se entrenó esta versión de modelo/clasificador.
+        dataset_content_hash = dataset.content_hash
+        dataset_row_count = dataset.row_count
     finally:
         db.close()
 
@@ -83,6 +87,9 @@ def train_for_company(company_id: int, dataset_id: int, timesteps: int = 50_000)
             "timesteps": timesteps,
             "approved": True,
             "classifier_trained": classifier_tmp_path is not None,
+            "dataset_id": dataset_id,
+            "dataset_content_hash": dataset_content_hash,
+            "dataset_row_count": dataset_row_count,
         }
         version_dir = model_registry.save_version(
             settings.MODELS_DIR,

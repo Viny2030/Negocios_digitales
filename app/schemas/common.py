@@ -32,4 +32,8 @@ class DatasetOut(BaseModel):
     name: str
     row_count: int
     status: DatasetStatus
+    # Dataset vigente para (company_id, case) -- ver app/services/dataset_ingestion.py.
+    is_active: bool
     created_at: dt.datetime
+    # Solo se completa si el dataset fue reemplazado in-place (PUT /datasets/{case}/{id}).
+    updated_at: dt.datetime | None = None
