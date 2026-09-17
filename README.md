@@ -13,7 +13,7 @@ política (RL) y consulta decisiones prescriptivas en tiempo real.
 | Caso | Nombre | Endpoint principal | Algoritmo |
 |---|---|---|---|
 | 1.1 | Secuenciación de mensajes multicanal | `POST /api/v1/case1/recommend-next-touchpoint` | DQN / PPO |
-| 2.1 | Pricing dinámico con restricciones de equidad | `POST /api/v1/case2/get-price` | PPO/DQN + LP (PuLP) + Fairlearn |
+| 2.1 | Pricing dinámico con restricciones de equidad | `POST /api/v1/case2/get-price` | PPO + LP (PuLP) + Fairlearn |
 | 3.3 | Triaje y priorización de anomalías | `POST /api/v1/case3/alert-webhook` | Clasificador auxiliar (RandomForest) + DQN |
 | 6.2 | Asignación de recursos en aceleradora/incubadora | `POST /api/v1/case4/allocate` | PPO + LP (PuLP, knapsack de portfolio) |
 
@@ -209,9 +209,21 @@ curl -X POST localhost:8000/api/v1/case2/get-price -H "X-API-Key: <API_KEY>" \
 
 ## Qué falta para producción (pendiente, fuera del alcance del esqueleto)
 
-- Migraciones con Alembic en vez de `create_all` en el startup para el arranque inicial (la carpeta `alembic/` ya existe y se usa para evolucionar el esquema, ver sección de arriba).
-- Cola real de entrenamiento (Celery/RQ) en vez de `BackgroundTasks` de FastAPI.
-- Integración real con Jira/Opsgenie/Zendesk en `case3_anomaly/service.py` (`_create_ticket_if_needed`).
-- Evaluación automática de Demographic Parity (Fairlearn) como gate antes de promover un modelo de pricing a producción.
-- Autenticación más robusta (rotación de API keys, rate limiting por empresa).
-- Panel/frontend para que la empresa suba datasets y vea métricas (fuera del alcance de este repo backend).
+Esta sección quedó desactualizada en algún momento: varios de los puntos que decía
+"pendientes" ya están implementados en el repo (Alembic, la cola real de Celery, el gate
+de equidad y el rate limiting por empresa), así que se corrige acá para no confundir a
+quien recién llega al proyecto. Lo que realmente falta:
+
+- Integración real con Jira/Opsgenie/Zendesk en `case3_anomaly/service.py`
+  (`_create_ticket_if_needed` ya hace el POST al webhook configurado en
+  `TICKETING_WEBHOOK_URL` y ya es idempotente por `alert_id` -- ver `app/models/alert_ticket.py`
+  -- pero sigue sin haber una integración "de fábrica" con ninguna herramienta puntual).
+- Autenticación más robusta para empresas (rotación de API keys; hoy una key es válida
+  indefinidamente hasta que se marque `is_active=False` a mano).
+- Panel/frontend real para que la empresa suba datasets y vea métricas (`dashboard.html`
+  es un panel de pruebas técnico pensado para desarrollo/QA, no una UI para clientes).
+- Ya implementado (dejado de referencia, por si se lee esta sección desactualizada en un
+  fork o una versión vieja del repo): migraciones con Alembic (`alembic/`), cola real de
+  entrenamiento con Celery (`celery_app.py`, `app/tasks.py`), gate de equidad con
+  Fairlearn antes de promover un modelo de pricing (`case2_pricing/fairness.py` +
+  `scripts/train_case2.py`), y rate limiting por empresa (`rate_limit.py`).

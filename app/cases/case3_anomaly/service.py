@@ -4,11 +4,13 @@ crea el ticket priorizado en la herramienta de gestión de la empresa (Jira/Opsg
 import logging
 
 import httpx
+from sqlalchemy.orm import Session
 
 import model_registry
 from app.cases.case3_anomaly.classifier import FalsePositiveClassifier
 from app.cases.case3_anomaly.policy import AnomalyTriagePolicy
 from app.cases.case3_anomaly.schemas import AlertWebhookPayload, TeamCapacity, TriageAction, TriageDecision
+from app.models.alert_ticket import AlertTicket
 from config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -40,18 +42,36 @@ def _get_classifier_for_company(company_id: int) -> FalsePositiveClassifier:
             CASE,
             "fp_classifier.joblib",
         )
-        cached = (current_version_id, FalsePositiveClassifier(model_path=model_path))
+        # `classifier_features` viene de metrics/metadata.json de la versión promovida (ver
+        # scripts/train_case3.py::train_for_company). Si falta (modelo viejo, o no hay ninguna
+        # versión promovida todavía), FalsePositiveClassifier cae a su lista de columnas por
+        # defecto.
+        metrics = model_registry.get_current_metrics(settings.MODELS_DIR, company_id, CASE) or {}
+        feature_cols = metrics.get("classifier_features")
+        cached = (current_version_id, FalsePositiveClassifier(model_path=model_path, feature_cols=feature_cols))
         _classifier_cache[company_id] = cached
     return cached[1]
 
 
-def _create_ticket_if_needed(company_id: int, action: TriageAction, payload: AlertWebhookPayload) -> bool:
+def _create_ticket_if_needed(
+    company_id: int,
+    action: TriageAction,
+    payload: AlertWebhookPayload,
+    db: Session,
+) -> bool:
     """Si la acción de triaje amerita intervención humana, crea el ticket en la herramienta de
     gestión de la empresa vía un webhook HTTP genérico (Jira/Opsgenie/Zendesk automation webhook,
     o un endpoint intermedio propio que la empresa configure). La URL sale de
     settings.TICKETING_WEBHOOK_URL (ver .env.example); mientras no esté configurada, no hay
     integración real disponible: se deja constancia en el log y se sigue sin crear el ticket, en
-    vez de hacer fallar el triaje completo por un problema de configuración externo."""
+    vez de hacer fallar el triaje completo por un problema de configuración externo.
+
+    Idempotencia: un webhook de alerta reintentado (mismo `alert_id`, p.ej. porque Datadog/Looker
+    reintenta tras un timeout de red) NO debe generar un segundo ticket. Antes de llamar al
+    webhook externo se busca en `alert_tickets` si ya existe un ticket creado con éxito para
+    (company_id, alert_id); si existe, se devuelve True sin volver a golpear el webhook. Sólo se
+    persiste una fila cuando el ticket efectivamente se creó (webhook respondió OK) -- si el
+    webhook falla, no se guarda nada, para que un reintento futuro pueda volver a intentarlo."""
     necesita_ticket = action in (
         TriageAction.investigate_light,
         TriageAction.investigate_deep,
@@ -60,6 +80,23 @@ def _create_ticket_if_needed(company_id: int, action: TriageAction, payload: Ale
     )
     if not necesita_ticket:
         return False
+
+    existing = (
+        db.query(AlertTicket)
+        .filter(
+            AlertTicket.company_id == company_id,
+            AlertTicket.alert_id == payload.alert_id,
+            AlertTicket.ticket_created.is_(True),
+        )
+        .first()
+    )
+    if existing is not None:
+        logger.info(
+            "Ticket ya existía para alert_id=%s (empresa=%s); no se reintenta el webhook (llamada duplicada/retry).",
+            payload.alert_id,
+            company_id,
+        )
+        return True
 
     if not settings.TICKETING_WEBHOOK_URL:
         logger.info(
@@ -97,6 +134,15 @@ def _create_ticket_if_needed(company_id: int, action: TriageAction, payload: Ale
     logger.info(
         "Ticket creado para alert_id=%s (empresa=%s, acción=%s).", payload.alert_id, company_id, action.value
     )
+    db.add(
+        AlertTicket(
+            company_id=company_id,
+            alert_id=payload.alert_id,
+            action=action.value,
+            ticket_created=True,
+        )
+    )
+    db.commit()
     return True
 
 
@@ -104,6 +150,7 @@ def handle_alert_webhook(
     company_id: int,
     payload: AlertWebhookPayload,
     capacity: TeamCapacity,
+    db: Session,
 ) -> TriageDecision:
     classifier = _get_classifier_for_company(company_id)
     fp_proba = classifier.predict_false_positive_proba(payload)
@@ -111,7 +158,7 @@ def handle_alert_webhook(
     policy = _get_policy_for_company(company_id)
     action, priority_score = policy.decide(payload, capacity, fp_proba)
 
-    ticket_created = _create_ticket_if_needed(company_id, action, payload)
+    ticket_created = _create_ticket_if_needed(company_id, action, payload, db)
 
     rationale = (
         f"z-score={payload.z_score:.2f}, prob. falso positivo={fp_proba:.2f}, "

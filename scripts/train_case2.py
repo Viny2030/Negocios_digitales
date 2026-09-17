@@ -39,7 +39,14 @@ def train_for_company(
     timesteps: int = 50_000,
     fairness_penalty_weight: float = 1.0,
 ) -> dict:
-    from stable_baselines3 import DQN, PPO
+    from stable_baselines3 import PPO
+
+    if algorithm.lower() != "ppo":
+        raise ValueError(
+            f"Algoritmo '{algorithm}' no soportado para case2_pricing: el espacio de "
+            "acciones es continuo (Box) y solo PPO lo soporta en SB3. DQN requiere "
+            "acciones discretas."
+        )
 
     db: Session = SessionLocal()
     try:
@@ -55,8 +62,7 @@ def train_for_company(
         db.close()
 
     env = PricingEnv(historical_df=historical_df, fairness_penalty_weight=fairness_penalty_weight)
-    algo_cls = DQN if algorithm.lower() == "dqn" else PPO
-    model = algo_cls("MlpPolicy", env, verbose=0)
+    model = PPO("MlpPolicy", env, verbose=0)
     model.learn(total_timesteps=timesteps)
 
     fairness_result = evaluate_fairness(model, historical_df, env.min_multiplier, env.max_multiplier)

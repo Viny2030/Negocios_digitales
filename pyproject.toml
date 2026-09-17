@@ -1,6 +1,19 @@
 [tool.ruff]
 line-length = 115
-target-version = "py312"
+# Alineado con el Dockerfile de producción (python:3.11-slim) y el CI (.github/workflows/
+# tests.yml) -- antes decía "py312" mientras el contenedor real corre 3.11, así que ruff
+# podía sugerir/aceptar sintaxis que se rompe en producción.
+target-version = "py311"
+
+[tool.ruff.format]
+# El repo fuerza LF en todo el código vía .gitattributes (`* text=auto eol=lf`), pero el
+# default de ruff-format para el final de línea es "auto" (usa el de cada archivo, o el
+# nativo del SO si es ambiguo) -- en Windows eso hizo que `ruff format`/el hook de
+# pre-commit reescribiera algunos archivos con CRLF, entrando en conflicto con
+# .gitattributes y con el resultado de correr el mismo hook en Linux/Mac/CI, y
+# generando un ciclo de "el hook sigue modificando archivos" en cada commit. Fijarlo acá
+# saca la ambigüedad: ruff siempre emite LF, sin importar el SO donde corra.
+line-ending = "lf"
 
 [tool.ruff.lint]
 # E/F = pyflakes+pycodestyle básicos, I = orden de imports (isort), UP = sintaxis moderna,

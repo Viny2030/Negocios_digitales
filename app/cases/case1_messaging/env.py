@@ -16,7 +16,7 @@ except ImportError:  # gymnasium es opcional hasta que se entrene de verdad
     gym = None
     spaces = None
 
-from app.cases.case1_messaging.encoding import STATE_DIM, row_to_vector
+from app.cases.case1_messaging.encoding import STATE_DIM, _bool, _num, row_to_vector
 from app.cases.case1_messaging.schemas import Touchpoint
 
 ACTIONS = list(Touchpoint)
@@ -24,33 +24,6 @@ ACTIONS = list(Touchpoint)
 # Peso de cada etapa del funnel en la probabilidad de conversión: un prospecto en
 # "decision" convierte más fácil al ser contactado que uno recién en "awareness".
 _STAGE_WEIGHT = {"decision": 1.0, "consideration": 0.6, "awareness": 0.3}
-
-
-def _num(row: pd.Series, key: str, default: float) -> float:
-    """Lee una columna numérica de la fila tolerando NaN/None -- `row.get(key, default)
-    or default` NO alcanza acá porque un NaN de pandas es "truthy" en Python (no es
-    falsy como 0 o None), así que se colaba tal cual en vez de caer al default."""
-    value = row.get(key, default)
-    if value is None:
-        return default
-    try:
-        if pd.isna(value):
-            return default
-    except (TypeError, ValueError):
-        pass
-    return float(value)
-
-
-def _bool(row: pd.Series, key: str, default: bool) -> bool:
-    value = row.get(key, default)
-    if value is None:
-        return default
-    try:
-        if pd.isna(value):
-            return default
-    except (TypeError, ValueError):
-        pass
-    return bool(value)
 
 
 class MessagingSequencingEnv(gym.Env if gym else object):
@@ -112,7 +85,8 @@ class MessagingSequencingEnv(gym.Env if gym else object):
         responses_count = _num(row, "responses_count", 0.0)
         response_rate = responses_count / messages_received if messages_received > 0 else 0.2
 
-        stage = str(row.get("purchase_stage") or "awareness")
+        raw_stage = row.get("purchase_stage", "awareness")
+        stage = "awareness" if raw_stage is None or pd.isna(raw_stage) else str(raw_stage)
         stage_weight = _STAGE_WEIGHT.get(stage, 0.4)
 
         # Recencia: efectividad máxima alrededor de una semana desde el último contacto;

@@ -21,7 +21,7 @@ agente activo (la incubadora); función de recompensa definida sobre el portfoli
 completo".
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class StartupProfile(BaseModel):
@@ -71,6 +71,24 @@ class StartupAllocation(BaseModel):
 class AllocationRequest(BaseModel):
     startups: list[StartupProfile]
     resources: ResourcePool
+
+    @model_validator(mode="after")
+    def _check_unique_startup_ids(self) -> "AllocationRequest":
+        seen: set[str] = set()
+        duplicates: set[str] = set()
+        for s in self.startups:
+            if s.startup_id in seen:
+                duplicates.add(s.startup_id)
+            seen.add(s.startup_id)
+        if duplicates:
+            raise ValueError(
+                "startup_id duplicado(s) en startups: "
+                f"{sorted(duplicates)}. policy.score_portfolio colapsa duplicados por "
+                "startup_id pero apply_portfolio_allocation reportaría la misma "
+                "asignación dos veces, inflando el total reportado por sobre el "
+                "presupuesto real."
+            )
+        return self
 
 
 class AllocationResponse(BaseModel):

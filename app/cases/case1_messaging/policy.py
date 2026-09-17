@@ -17,10 +17,15 @@ except ImportError:
 
 
 class MessagingPolicy:
-    def __init__(self, model_path: str | None = None):
+    def __init__(self, model_path: str | None = None, algorithm: str | None = None):
+        """`algorithm` debe venir de los metadatos de la versión entrenada (ver
+        model_registry.get_current_metrics), NO adivinarse del nombre del archivo:
+        `scripts/train_case1.py` guarda siempre el artefacto como "model.zip" (ver
+        model_registry.save_version), así que el path nunca contiene "ppo" ni "dqn",
+        y cargar la clase equivocada rompe con un state_dict mismatch de SB3."""
         self.model = None
         if model_path and os.path.exists(model_path) and DQN is not None:
-            loader = PPO if "ppo" in model_path.lower() else DQN
+            loader = PPO if (algorithm or "").lower() == "ppo" else DQN
             self.model = loader.load(model_path)
 
     def _heuristic(self, profile: ProspectProfile) -> tuple[Touchpoint, float, str]:

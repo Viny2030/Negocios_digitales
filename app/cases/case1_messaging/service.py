@@ -22,7 +22,9 @@ def _get_policy_for_company(company_id: int) -> MessagingPolicy:
     cached = _policy_cache.get(company_id)
     if cached is None or cached[0] != current_version_id:
         model_path = model_registry.get_current_artifact_path(settings.MODELS_DIR, company_id, CASE, "model.zip")
-        cached = (current_version_id, MessagingPolicy(model_path=model_path))
+        metrics = model_registry.get_current_metrics(settings.MODELS_DIR, company_id, CASE) or {}
+        algorithm = metrics.get("algorithm")
+        cached = (current_version_id, MessagingPolicy(model_path=model_path, algorithm=algorithm))
         _policy_cache[company_id] = cached
     return cached[1]
 

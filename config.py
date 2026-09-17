@@ -17,8 +17,10 @@ class Settings(BaseSettings):
     # Base de datos (Postgres en producción, SQLite para desarrollo local)
     DATABASE_URL: str = "sqlite:///./prescriptive.db"
 
-    # Seguridad
-    SECRET_KEY: str = "changeme-in-.env"
+    # Seguridad: la autenticación de empresas es por API Key (ver security.py), no por
+    # JWT/sesión firmada, así que no hay un SECRET_KEY de firma en uso -- se quitó el que
+    # había acá (con un default inseguro, "changeme-in-.env") porque no lo leía ningún
+    # módulo del proyecto y solo generaba una falsa sensación de configuración pendiente.
     API_KEY_HEADER: str = "X-API-Key"
 
     # Carpeta donde se guardan los datasets subidos por cada empresa

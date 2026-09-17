@@ -29,7 +29,7 @@ def apply_feasibility_filter(raw_price: float, request: PriceRequest) -> tuple[f
 
     # Coherencia competitiva: no superar en más de 20% el precio promedio de mercado
     effective_ceiling = ceiling_price
-    if request.competitor_avg_price:
+    if request.competitor_avg_price is not None:
         competitive_ceiling = request.competitor_avg_price * 1.2
         if competitive_ceiling < effective_ceiling:
             effective_ceiling = competitive_ceiling
@@ -49,5 +49,9 @@ def apply_feasibility_filter(raw_price: float, request: PriceRequest) -> tuple[f
         applied.append("ajuste_a_banda_permitida")
     if final_price <= floor_price + 1e-6 and "margen_minimo_prioritario_sobre_techo" not in applied:
         applied.append("margen_minimo_aplicado")
+
+    # Defensa en profundidad: aunque la validación de esquema ya impide costos/márgenes
+    # que produzcan un piso negativo, nunca se debe devolver un precio negativo al cliente.
+    final_price = max(final_price, 0.0)
 
     return round(final_price, 2), applied

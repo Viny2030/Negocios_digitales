@@ -15,6 +15,28 @@ from app.cases.case2_pricing.schemas import PriceRequest
 STATE_DIM = 6
 
 
+def _num(row, key: str, default: float | None) -> float | None:
+    """Lee un campo numérico de una fila/registro tolerando NaN/None -- `row.get(key,
+    default) or default` NO alcanza acá porque un NaN de pandas es "truthy" en Python
+    (no es falsy como 0 o None), así que se colaba tal cual en vez de caer al default;
+    además, `or default` trataría un 0.0 real (ej. inventario agotado, demanda nula)
+    como "faltante" y lo reemplazaría por el default. Puede devolver `default=None`
+    para distinguir "la columna no vino/estaba vacía" de "vino con un 0 real". Misma
+    fuente de verdad usada por `env.py` (ver también app/cases/case1_messaging/env.py)."""
+    value = row.get(key, default)
+    if value is None:
+        return default
+    try:
+        if pd.isna(value):
+            return default
+    except (TypeError, ValueError):
+        pass
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def _stable_segment_code(segment: str) -> float:
     """Codifica `user_segment` a un número en [0, 1). Usa hashlib en vez del `hash()`
     builtin de Python: `hash()` de un string está salado por proceso (PYTHONHASHSEED,
@@ -33,8 +55,9 @@ def request_to_vector(request: PriceRequest) -> np.ndarray:
     """Vector de estado (S): [inventory_level_pct_norm, base_cost_norm, segment_encoded,
     rejection_history(placeholder), competitor_price_norm, demand_index]."""
     competitor_norm = 0.5
-    if request.competitor_avg_price:
-        competitor_norm = min(request.competitor_avg_price / (request.base_cost * request.max_multiplier), 1.0)
+    if request.competitor_avg_price is not None:
+        denom = request.base_cost * request.max_multiplier
+        competitor_norm = min(request.competitor_avg_price / denom, 1.0) if denom > 0 else 1.0
     vector = [
         request.inventory_level_pct / 100.0,
         min(request.base_cost / 1000.0, 1.0),
@@ -50,24 +73,18 @@ def record_to_request(record: dict) -> PriceRequest:
     """Mapea una fila del dataset histórico de la empresa (transacciones/precios) a un
     PriceRequest. Nombres de columna canónicos con defaults tolerantes; documentar el
     mapeo esperado en el README del caso."""
-    competitor_avg_price = record.get("competitor_avg_price")
-    if (
-        competitor_avg_price is not None
-        and isinstance(competitor_avg_price, float)
-        and pd.isna(competitor_avg_price)
-    ):
-        competitor_avg_price = None
+    competitor_avg_price = _num(record, "competitor_avg_price", None)
 
     return PriceRequest(
         product_id=str(record.get("product_id", "unknown")),
-        base_cost=float(record.get("base_cost", 1.0) or 1.0),
+        base_cost=_num(record, "base_cost", 1.0),
         user_segment=str(record.get("user_segment", "default") or "default"),
-        inventory_level_pct=float(record.get("inventory_level_pct", 50.0) or 50.0),
+        inventory_level_pct=_num(record, "inventory_level_pct", 50.0),
         competitor_avg_price=competitor_avg_price,
-        demand_index=float(record.get("demand_index", 0.5) or 0.5),
-        min_margin_pct=float(record.get("min_margin_pct", 0.10) or 0.10),
-        max_multiplier=float(record.get("max_multiplier", 2.5) or 2.5),
-        min_multiplier=float(record.get("min_multiplier", 1.0) or 1.0),
+        demand_index=_num(record, "demand_index", 0.5),
+        min_margin_pct=_num(record, "min_margin_pct", 0.10),
+        max_multiplier=_num(record, "max_multiplier", 2.5),
+        min_multiplier=_num(record, "min_multiplier", 1.0),
     )
 
 

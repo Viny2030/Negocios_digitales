@@ -7,7 +7,9 @@ Recompensa (R): revenue neto - penalización de margen - penalización de equida
 Caso canónico del Anexo I (H1, OP1, OP2).
 """
 
-from pydantic import BaseModel, Field
+from typing import Literal
+
+from pydantic import BaseModel, Field, model_validator
 
 
 class PriceRequest(BaseModel):
@@ -17,9 +19,15 @@ class PriceRequest(BaseModel):
     inventory_level_pct: float = Field(..., ge=0, le=100)
     competitor_avg_price: float | None = None
     demand_index: float = Field(default=0.5, ge=0, le=1)
-    min_margin_pct: float = Field(default=0.10, description="Margen mínimo exigido por finanzas")
-    max_multiplier: float = Field(default=2.5)
-    min_multiplier: float = Field(default=1.0)
+    min_margin_pct: float = Field(default=0.10, ge=-0.99, le=5.0, description="Margen mínimo exigido por finanzas")
+    max_multiplier: float = Field(default=2.5, gt=0, le=50)
+    min_multiplier: float = Field(default=1.0, gt=0, le=50)
+
+    @model_validator(mode="after")
+    def _check_multiplier_band(self) -> "PriceRequest":
+        if self.max_multiplier <= self.min_multiplier:
+            raise ValueError("max_multiplier debe ser mayor que min_multiplier")
+        return self
 
 
 class PriceResponse(BaseModel):
@@ -32,6 +40,6 @@ class PriceResponse(BaseModel):
 
 class TrainRequest(BaseModel):
     dataset_id: int
-    algorithm: str = Field(default="ppo", description="ppo | dqn")
+    algorithm: Literal["ppo"] = Field(default="ppo", description="Único algoritmo soportado (acción continua)")
     timesteps: int = 50_000
     fairness_penalty_weight: float = 1.0

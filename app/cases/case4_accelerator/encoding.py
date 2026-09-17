@@ -59,6 +59,27 @@ def portfolio_to_vector(startups: list[StartupProfile], resources: ResourcePool)
     return np.array(vector, dtype=np.float32)
 
 
+def _num(record: dict, key: str, default: float) -> float:
+    """Lee un campo numérico de un registro tolerando NaN/None -- `record.get(key,
+    default) or default` NO alcanza acá porque un NaN de pandas es "truthy" en Python
+    (no es falsy como 0 o None), así que se colaba tal cual y hacía fallar la
+    validación `ge=0`/`le=1` de StartupProfile; además un 0.0 real (ej. runway_months=0,
+    la señal más importante de este caso de negocio) es falsy y `or default` lo
+    reemplazaba en silencio por el default, enmascarando justo el caso que más importa."""
+    value = record.get(key, default)
+    if value is None:
+        return default
+    try:
+        if pd.isna(value):
+            return default
+    except (TypeError, ValueError):
+        pass
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def record_to_startup(record: dict) -> StartupProfile:
     """Mapea una fila del dataset histórico de portfolios (Crunchbase / YC-500
     Startups open data / Endeavor LatAm / sintético) a un StartupProfile. Nombres de
@@ -66,17 +87,13 @@ def record_to_startup(record: dict) -> StartupProfile:
     README del caso."""
     return StartupProfile(
         startup_id=str(record.get("startup_id", "unknown")),
-        traction_score=float(record.get("traction_score", 0.5) or 0.5),
-        team_score=float(record.get("team_score", 0.5) or 0.5),
-        market_score=float(record.get("market_score", 0.5) or 0.5),
-        runway_months=float(record.get("runway_months", 6.0) or 6.0),
-        past_response_score=float(record.get("past_response_score", 0.5) or 0.5),
-        mentorship_hours_received_last_period=float(
-            record.get("mentorship_hours_received_last_period", 0.0) or 0.0
-        ),
-        followon_capital_received_last_period=float(
-            record.get("followon_capital_received_last_period", 0.0) or 0.0
-        ),
+        traction_score=_num(record, "traction_score", 0.5),
+        team_score=_num(record, "team_score", 0.5),
+        market_score=_num(record, "market_score", 0.5),
+        runway_months=_num(record, "runway_months", 6.0),
+        past_response_score=_num(record, "past_response_score", 0.5),
+        mentorship_hours_received_last_period=_num(record, "mentorship_hours_received_last_period", 0.0),
+        followon_capital_received_last_period=_num(record, "followon_capital_received_last_period", 0.0),
     )
 
 

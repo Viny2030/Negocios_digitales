@@ -124,6 +124,24 @@ def get_current_artifact_path(models_dir: str, company_id: int, case: str, filen
     return path if os.path.exists(path) else None
 
 
+def get_current_metrics(models_dir: str, company_id: int, case: str) -> dict | None:
+    """Devuelve el dict `metrics` de metadata.json de la versión actualmente promovida
+    (p.ej. {"algorithm": "ppo", "timesteps": ..., ...}), o None si no hay versión
+    promovida o falta el archivo. Los `PolicyWrapper` de cada caso lo usan para saber
+    con qué algoritmo se entrenó realmente el modelo, en vez de adivinarlo por el
+    nombre del artefacto -- todos los `train_caseN.py` guardan siempre `model.zip`
+    (ver save_version), así que el nombre nunca contiene el algoritmo."""
+    vdir = get_current_version_dir(models_dir, company_id, case)
+    if vdir is None:
+        return None
+    meta_path = os.path.join(vdir, "metadata.json")
+    if not os.path.exists(meta_path):
+        return None
+    with open(meta_path, encoding="utf-8") as f:
+        metadata = json.load(f)
+    return metadata.get("metrics")
+
+
 def list_versions(models_dir: str, company_id: int, case: str) -> list[dict]:
     """Historial completo de versiones (aprobadas o no), más recientes al final."""
     root = _versions_dir(models_dir, company_id, case)

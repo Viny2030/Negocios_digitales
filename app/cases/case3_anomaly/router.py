@@ -18,17 +18,20 @@ def alert_webhook_endpoint(
     payload: AlertWebhookPayload,
     analyst_hours_available: float = 8.0,
     pending_alerts_in_queue: int = 0,
+    db: Session = Depends(get_db),
     company: Company = Depends(get_current_company),
 ):
     """Endpoint /api/v1/case3/alert-webhook: recibe el payload plano que envia Datadog/Looker
     (sin envolver) y devuelve la decision de triaje priorizada. La capacidad del equipo se pasa
     como query params opcionales (en produccion, se resolveria consultando el estado interno
-    de capacidad de la empresa en vez de recibirla del webhook del proveedor de monitoreo)."""
+    de capacidad de la empresa en vez de recibirla del webhook del proveedor de monitoreo).
+    Se pasa `db` a handle_alert_webhook para poder chequear/registrar en `alert_tickets` si un
+    alert_id ya generó ticket antes (idempotencia ante reintentos del webhook)."""
     capacity = TeamCapacity(
         analyst_hours_available=analyst_hours_available,
         pending_alerts_in_queue=pending_alerts_in_queue,
     )
-    return handle_alert_webhook(company.id, payload, capacity)
+    return handle_alert_webhook(company.id, payload, capacity, db)
 
 
 @router.post("/train", status_code=202)

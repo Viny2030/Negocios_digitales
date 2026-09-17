@@ -29,12 +29,19 @@ settings = get_settings()
 CASE = "case3_anomaly"
 
 
-def _train_fp_classifier(historical_df: pd.DataFrame, tmp_dir: str) -> str | None:
+def _train_fp_classifier(historical_df: pd.DataFrame, tmp_dir: str) -> tuple[str, list[str]] | None:
     """Espera columnas: z_score, pct_change, historical_similar_count, estimated_financial_impact,
     is_false_positive (1 = false_positive, 0 = real_incident). Acepta `label` como alias
     legado de `is_false_positive` (nombre viejo de esta misma columna, ver
     generate_synthetic_data.py) para no romper datasets que una empresa ya haya subido
-    con el nombre anterior. Si el dataset no trae ninguna de las dos, se omite este paso."""
+    con el nombre anterior. Si el dataset no trae ninguna de las dos, se omite este paso.
+
+    Devuelve (ruta_al_joblib, available_cols): `available_cols` es la lista real de columnas
+    (y su orden) con las que se entrenó, que puede ser un subconjunto de `feature_cols` si al
+    dataset le faltaba alguna. Hay que persistirla (ver metrics["classifier_features"] en
+    train_for_company) para que `app/cases/case3_anomaly/classifier.py` construya el vector de
+    inferencia con exactamente esas mismas columnas -- si no, `model.predict_proba` recibe menos
+    o más features de las que el modelo espera y explota con ValueError."""
     label_col = "is_false_positive" if "is_false_positive" in historical_df.columns else "label"
     if label_col not in historical_df.columns:
         return None
@@ -50,7 +57,7 @@ def _train_fp_classifier(historical_df: pd.DataFrame, tmp_dir: str) -> str | Non
 
     tmp_path = os.path.join(tmp_dir, "fp_classifier.joblib")
     joblib.dump(clf, tmp_path)
-    return tmp_path
+    return tmp_path, available_cols
 
 
 def train_for_company(company_id: int, dataset_id: int, timesteps: int = 50_000) -> dict:
@@ -74,7 +81,8 @@ def train_for_company(company_id: int, dataset_id: int, timesteps: int = 50_000)
     os.makedirs(out_dir, exist_ok=True)
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        classifier_tmp_path = _train_fp_classifier(historical_df, tmp_dir)
+        classifier_result = _train_fp_classifier(historical_df, tmp_dir)
+        classifier_tmp_path, classifier_features = classifier_result if classifier_result else (None, None)
 
         env = AnomalyTriageEnv(historical_df=historical_df)
         model = DQN("MlpPolicy", env, verbose=0)
@@ -91,6 +99,12 @@ def train_for_company(company_id: int, dataset_id: int, timesteps: int = 50_000)
             "timesteps": timesteps,
             "approved": True,
             "classifier_trained": classifier_tmp_path is not None,
+            # Columnas (y orden) reales con las que se entrenó el clasificador -- puede ser un
+            # subconjunto de las columnas "ideales" si el dataset no traía alguna (ver
+            # `available_cols` en _train_fp_classifier). `classifier.py` la lee vía
+            # model_registry.get_current_metrics para reconstruir el vector de inferencia con
+            # las mismas columnas y evitar un mismatch de shape contra el modelo.
+            "classifier_features": classifier_features,
             "dataset_id": dataset_id,
             "dataset_content_hash": dataset_content_hash,
             "dataset_row_count": dataset_row_count,

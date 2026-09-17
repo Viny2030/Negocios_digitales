@@ -38,10 +38,17 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# `allow_origins=["*"]` (el default, ver settings.CORS_ORIGINS) + `allow_credentials=True`
+# es una combinación inválida según la spec de CORS (un origen comodín no puede llevar
+# credenciales) -- Starlette la "resuelve" reflejando el Origin real de cada request en
+# vez de "*", lo que en la práctica abre credenciales a cualquier origen. Como la auth acá
+# es un header explícito (X-API-Key), no cookies/sesión, no hace falta allow_credentials
+# salvo que se configuren orígenes específicos (no "*").
+_cors_allow_all_origins = "*" in settings.CORS_ORIGINS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
-    allow_credentials=True,
+    allow_credentials=not _cors_allow_all_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )

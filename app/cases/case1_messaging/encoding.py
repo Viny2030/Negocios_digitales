@@ -36,6 +36,38 @@ def profile_to_vector(profile: ProspectProfile) -> np.ndarray:
     return np.array(vector, dtype=np.float32)
 
 
+def _num(row, key: str, default: float) -> float:
+    """Lee un campo numérico de una fila/registro tolerando NaN/None -- `row.get(key,
+    default) or default` NO alcanza acá porque un NaN de pandas es "truthy" en Python
+    (no es falsy como 0 o None), así que se colaba tal cual en vez de caer al default."""
+    value = row.get(key, default)
+    if value is None:
+        return default
+    try:
+        if pd.isna(value):
+            return default
+    except (TypeError, ValueError):
+        pass
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _bool(row, key: str, default: bool) -> bool:
+    """Igual que `_num` pero para flags booleanos (ej. `unsubscribed`): un NaN no debe
+    interpretarse como True."""
+    value = row.get(key, default)
+    if value is None:
+        return default
+    try:
+        if pd.isna(value):
+            return default
+    except (TypeError, ValueError):
+        pass
+    return bool(value)
+
+
 def _parse_channels_contacted(raw) -> list[str]:
     """El CSV del cliente no puede tener listas nativas: `channels_contacted` viaja
     como string separado por coma o punto y coma (ej. "email_a;sms"). Si ya viene
@@ -57,14 +89,18 @@ def record_to_profile(record: dict) -> ProspectProfile:
     Usa nombres de columna canónicos con defaults tolerantes, porque cada CRM
     exporta con sus propios nombres; documentar el mapeo esperado en el README
     del caso para que la empresa ajuste su export si hace falta."""
+    raw_stage = record.get("purchase_stage", "awareness")
+    if raw_stage is None or (isinstance(raw_stage, float) and pd.isna(raw_stage)):
+        raw_stage = "awareness"
+    purchase_stage = str(raw_stage).strip() or "awareness"
     return ProspectProfile(
         prospect_id=str(record.get("prospect_id", "unknown")),
         channels_contacted=_parse_channels_contacted(record.get("channels_contacted")),
-        messages_received=int(record.get("messages_received", 0) or 0),
-        responses_count=int(record.get("responses_count", 0) or 0),
-        days_since_last_contact=float(record.get("days_since_last_contact", 0.0) or 0.0),
-        purchase_stage=str(record.get("purchase_stage", "awareness") or "awareness"),
-        unsubscribed=bool(record.get("unsubscribed", False)),
+        messages_received=int(_num(record, "messages_received", 0.0)),
+        responses_count=int(_num(record, "responses_count", 0.0)),
+        days_since_last_contact=_num(record, "days_since_last_contact", 0.0),
+        purchase_stage=str(purchase_stage),
+        unsubscribed=_bool(record, "unsubscribed", False),
     )
 
 

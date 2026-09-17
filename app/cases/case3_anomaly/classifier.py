@@ -14,25 +14,40 @@ import numpy as np
 
 from app.cases.case3_anomaly.schemas import AlertWebhookPayload
 
+# Debe coincidir exactamente (nombres y orden) con `feature_cols` en
+# scripts/train_case3.py::_train_fp_classifier. Se usa como fallback cuando la versión
+# promovida no trae `classifier_features` en sus metrics (modelos entrenados antes de
+# que se empezara a persistir esa lista, o si el dataset de entrenamiento traía todas
+# las columnas).
+DEFAULT_FEATURE_COLS = ["z_score", "pct_change", "historical_similar_count", "estimated_financial_impact"]
+
 
 class FalsePositiveClassifier:
-    def __init__(self, model_path: str | None = None):
+    def __init__(self, model_path: str | None = None, feature_cols: list[str] | None = None):
         self.model = None
         if model_path and os.path.exists(model_path):
             self.model = joblib.load(model_path)
+        # Columnas (y orden) con las que se entrenó realmente el modelo cargado -- ver
+        # `available_cols` en scripts/train_case3.py. Si el dataset de entrenamiento no traía
+        # alguna columna, el modelo se entrenó con menos features; hay que reconstruir el vector
+        # de inferencia con exactamente esas mismas columnas para no romper
+        # `model.predict_proba` (ValueError: X has N features, but ... expects M) ni volver a
+        # introducir el desajuste train/serve.
+        self.feature_cols = feature_cols or DEFAULT_FEATURE_COLS
 
-    @staticmethod
-    def _payload_to_features(payload: AlertWebhookPayload) -> np.ndarray:
-        return np.array(
-            [
-                [
-                    abs(payload.z_score),
-                    payload.pct_change or 0.0,
-                    payload.historical_similar_count,
-                    1.0 if payload.estimated_financial_impact else 0.0,
-                ]
-            ]
-        )
+    def _payload_to_features(self, payload: AlertWebhookPayload) -> np.ndarray:
+        # OJO: estos valores deben ser exactamente los mismos (mismo signo, misma magnitud, sin
+        # binarizar) que las columnas homónimas que usa `_train_fp_classifier` en
+        # scripts/train_case3.py al entrenar, o el modelo recibe en inferencia features que no
+        # tienen nada que ver con lo que aprendió.
+        available_values = {
+            "z_score": payload.z_score,
+            "pct_change": payload.pct_change or 0.0,
+            "historical_similar_count": payload.historical_similar_count,
+            "estimated_financial_impact": payload.estimated_financial_impact or 0.0,
+        }
+        row = [available_values[col] for col in self.feature_cols]
+        return np.array([row])
 
     def predict_false_positive_proba(self, payload: AlertWebhookPayload) -> float:
         if self.model is None:
@@ -43,5 +58,12 @@ class FalsePositiveClassifier:
 
         features = self._payload_to_features(payload)
         proba = self.model.predict_proba(features)[0]
-        # Se asume orden de clases [real_incident, false_positive]; ajustar según el entrenamiento real
-        return float(proba[1])
+        # No asumir que `classes_` siempre tiene longitud 2 y que el índice 1 es la clase
+        # "false_positive": si el historial de la empresa todavía no tiene tickets de ambas
+        # clases (dataset nuevo con `is_false_positive` todo 0 o todo 1, algo realista para una
+        # empresa con pocos tickets), `model.classes_` tiene un solo elemento y `proba[1]`
+        # explota con IndexError. Mapear por la etiqueta real de clase evita eso: si sólo existe
+        # la clase 0, la probabilidad de clase 1 es 0.0; si sólo existe la clase 1, todo es esa
+        # clase y su probabilidad es el único valor de `proba`.
+        proba_by_class = dict(zip(self.model.classes_, proba, strict=True))
+        return float(proba_by_class.get(1, 0.0))

@@ -7,7 +7,6 @@ combinados con fuentes públicas de referencia (Inside Airbnb, Expedia) para ela
 from collections import deque
 
 import numpy as np
-import pandas as pd
 
 try:
     import gymnasium as gym
@@ -16,7 +15,7 @@ except ImportError:
     gym = None
     spaces = None
 
-from app.cases.case2_pricing.encoding import STATE_DIM, row_to_vector
+from app.cases.case2_pricing.encoding import STATE_DIM, _num, row_to_vector
 
 # Elasticidad relativa por segmento: budget cae más rápido al subir el multiplicador
 # (más sensible al precio), premium cae más lento. Multiplica el término de precio de
@@ -24,21 +23,6 @@ from app.cases.case2_pricing.encoding import STATE_DIM, row_to_vector
 # entrenamiento tenga una señal de "quién es más sensible al precio" por segmento, ver
 # también el docstring de la clase.
 _SEGMENT_ELASTICITY = {"premium": 0.5, "standard": 1.0, "budget": 1.5}
-
-
-def _num(row: pd.Series, key: str, default: float | None) -> float | None:
-    """Lee una columna numérica de la fila tolerando NaN/None -- ver mismo helper en
-    app/cases/case1_messaging/env.py. Puede devolver `default=None` para distinguir
-    "la columna no vino/estaba vacía" de "vino con un 0 real"."""
-    value = row.get(key, default)
-    if value is None:
-        return default
-    try:
-        if pd.isna(value):
-            return default
-    except (TypeError, ValueError):
-        pass
-    return float(value)
 
 
 class PricingEnv(gym.Env if gym else object):

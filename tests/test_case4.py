@@ -102,6 +102,35 @@ def test_allocate_limits_strategic_connections(client, company_api_key):
     assert len(activated) <= 2
 
 
+def test_allocate_rejects_duplicate_startup_id(client, company_api_key):
+    payload = {
+        "startups": [
+            {
+                "startup_id": "dup",
+                "traction_score": 0.9,
+                "team_score": 0.8,
+                "market_score": 0.7,
+                "runway_months": 6,
+            },
+            {
+                "startup_id": "dup",
+                "traction_score": 0.3,
+                "team_score": 0.4,
+                "market_score": 0.5,
+                "runway_months": 12,
+            },
+        ],
+        "resources": {
+            "mentorship_hours_available": 30,
+            "followon_capital_available": 0,
+            "strategic_connections_available": 1,
+        },
+    }
+    resp = client.post("/api/v1/case4/allocate", json=payload, headers={"X-API-Key": company_api_key})
+    assert resp.status_code == 422
+    assert "dup" in resp.text
+
+
 def test_allocate_requires_api_key(client):
     payload = {
         "startups": [
