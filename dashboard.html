@@ -6,61 +6,70 @@
 <title>Panel de Pruebas - DynamicPricing / SmartRoute / LeadMatch</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css">
 <style>
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  /* Tailwind 2.x (cargado abajo) no trae la paleta "slate" ni el tono -950, así que
+     el fondo de página más oscuro (por debajo de bg-gray-900 en las cards) se define
+     acá directo en vez de con una clase de utilidad que no existiría en esta versión. */
+  body { background: #0b1220; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
   pre { white-space: pre-wrap; word-break: break-word; }
   textarea { font-family: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace; font-size: 12.5px; }
-  .tab-btn { border-bottom: 3px solid transparent; color: #6b7280; transition: all .15s; }
+  .tab-btn { border-bottom: 3px solid transparent; color: #64748b; transition: all .15s; }
   .tab-btn.active { font-weight: 700; }
   .subtab-btn.active { font-weight: 600; }
-  .spinner { border: 3px solid #e5e7eb; border-top: 3px solid #4f46e5; border-radius: 50%; width: 18px; height: 18px; animation: spin 0.7s linear infinite; display: inline-block; }
+  .spinner { border: 3px solid #1e293b; border-top: 3px solid #38bdf8; border-radius: 50%; width: 18px; height: 18px; animation: spin 0.7s linear infinite; display: inline-block; }
   @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  input, textarea, select { color-scheme: dark; }
+  ::placeholder { color: #64748b; }
 </style>
 </head>
-<body class="bg-gray-100 text-gray-800 min-h-screen">
+<body class="text-gray-100 min-h-screen">
 
 <div class="max-w-6xl mx-auto p-4">
 
-  <div class="bg-white rounded-lg shadow p-4 mb-4">
+  <div class="bg-gray-900 border border-gray-800 rounded-lg shadow p-4 mb-4">
     <div class="flex items-center justify-between flex-wrap gap-2">
       <div>
-        <h1 class="text-xl font-bold text-gray-900">Panel de Pruebas — DynamicPricing · SmartRoute · LeadMatch</h1>
-        <p class="text-sm text-gray-500">Prueba manual contra <code id="baseUrlLabel"></code> (se auto-configura leyendo <code>/openapi.json</code>).</p>
+        <h1 class="text-xl font-bold text-blue-300">Panel de Pruebas — DynamicPricing · SmartRoute · LeadMatch</h1>
+        <p class="text-sm text-gray-400">Prueba manual contra <code id="baseUrlLabel"></code> (se auto-configura leyendo <code>/openapi.json</code>).</p>
       </div>
       <div id="healthDot" class="flex items-center gap-2 text-sm">
-        <span class="w-3 h-3 rounded-full bg-gray-300 inline-block" id="healthCircle"></span>
-        <span id="healthText" class="text-gray-500">sin verificar</span>
+        <span class="w-3 h-3 rounded-full bg-gray-600 inline-block" id="healthCircle"></span>
+        <span id="healthText" class="text-gray-400">sin verificar</span>
       </div>
     </div>
 
-    <div class="mt-3 border rounded-lg">
-      <button onclick="toggleHelp()" class="w-full text-left px-3 py-2 text-sm font-semibold text-gray-700 flex items-center justify-between">
+    <div class="mt-3 border border-gray-800 rounded-lg">
+      <button onclick="toggleHelp()" class="w-full text-left px-3 py-2 text-sm font-semibold text-gray-300 flex items-center justify-between">
         <span>¿Cómo usar este panel? (guía rápida para quien no conoce el proyecto)</span>
         <span id="helpArrow">▸</span>
       </button>
-      <div id="helpBody" class="hidden px-4 pb-3 text-sm text-gray-600 space-y-2 border-t pt-2">
-        <p>Esta plataforma tiene <strong>3 productos</strong>, cada empresa cliente con su propia API key. <strong>DynamicPricing</strong> y <strong>SmartRoute</strong> son stateless: cada request se resuelve de punta a punta con los datos que trae (optimización matemática, sin modelo que entrenar). <strong>LeadMatch</strong> sí entrena un clasificador por empresa a partir de un dataset subido; mientras no haya uno entrenado, usa una heurística de respaldo.</p>
-        <p><strong>Pasos:</strong> 1) Pedí tu API key al equipo (identifica tu empresa). 2) Pegala arriba y tocá "Conectar y cargar API" — esto lee la documentación técnica de la API y arma los formularios automáticamente. 3) Elegí la pestaña del producto que querés probar. 4) Para LeadMatch, además de <em>Probar</em> tenés <em>Entrenar</em> y <em>Datasets</em> para subir tu histórico de leads.</p>
-        <p><strong>Cómo leer una respuesta:</strong> los campos JSON siguen el schema documentado en <code>/docs</code>. En LeadMatch, <code>used_default_scoring: true</code> indica que todavía no hay modelo entrenado para esa empresa y se usó la heurística de respaldo.</p>
+      <div id="helpBody" class="hidden px-4 pb-3 text-sm text-gray-400 space-y-2 border-t border-gray-800 pt-2">
+        <p>Esta plataforma tiene <strong class="text-gray-200">3 productos</strong>, cada empresa cliente con su propia API key. <strong class="text-blue-300">DynamicPricing</strong> y <strong class="text-purple-300">SmartRoute</strong> son stateless: cada request se resuelve de punta a punta con los datos que trae (optimización matemática, sin modelo que entrenar). <strong class="text-green-300">LeadMatch</strong> sí entrena un clasificador por empresa a partir de un dataset subido; mientras no haya uno entrenado, usa una heurística de respaldo.</p>
+        <p><strong class="text-gray-200">Pasos:</strong> 1) Pedí tu API key al equipo (identifica tu empresa). 2) Pegala arriba y tocá "Conectar y cargar API" — esto lee la documentación técnica de la API y arma los formularios automáticamente. 3) Elegí la pestaña del producto que querés probar. 4) Para LeadMatch, además de <em>Probar</em> tenés <em>Entrenar</em> y <em>Datasets</em> para subir tu histórico de leads.</p>
+        <p><strong class="text-gray-200">Cómo leer una respuesta:</strong> los campos JSON siguen el schema documentado en <code>/docs</code>. En LeadMatch, <code>used_default_scoring: true</code> indica que todavía no hay modelo entrenado para esa empresa y se usó la heurística de respaldo.</p>
       </div>
     </div>
 
     <div class="mt-4">
-      <label class="text-xs font-semibold text-gray-500">X-API-Key (company)</label>
-      <input id="apiKey" type="text" placeholder="pk_..." class="w-full border rounded px-2 py-1.5 text-sm">
+      <label class="text-xs font-semibold text-gray-400">X-API-Key (company)</label>
+      <div class="flex gap-2">
+        <input id="apiKey" type="password" autocomplete="off" placeholder="pk_..." class="w-full bg-gray-800 border border-gray-700 text-gray-100 rounded px-2 py-1.5 text-sm">
+        <button type="button" onclick="toggleApiKeyVisibility()" id="apiKeyToggle" title="Mostrar/ocultar" class="flex-shrink-0 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 text-sm px-3 rounded">👁</button>
+      </div>
+      <p class="text-xs text-gray-500 mt-1">Se guarda solo en tu navegador (localStorage), nunca queda en pantalla salvo que toques el ícono.</p>
     </div>
     <div class="flex gap-2 mt-3">
-      <button onclick="init()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-1.5 rounded">Conectar y cargar API</button>
-      <button onclick="checkHealth()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm font-medium px-4 py-1.5 rounded">Probar /health</button>
-      <span id="loadStatus" class="text-sm text-gray-500 self-center"></span>
+      <button onclick="init()" class="bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium px-4 py-1.5 rounded">Conectar y cargar API</button>
+      <button onclick="checkHealth()" class="bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 text-sm font-medium px-4 py-1.5 rounded">Probar /health</button>
+      <span id="loadStatus" class="text-sm text-gray-400 self-center"></span>
     </div>
   </div>
 
-  <div id="tabPanel" class="rounded-lg shadow transition-colors duration-200" style="background-color:#fff">
-    <div id="tabBar" class="flex border-b overflow-x-auto"></div>
+  <div id="tabPanel" class="rounded-lg shadow transition-colors duration-200 border border-gray-800" style="background-color:#0f172a">
+    <div id="tabBar" class="flex border-b border-gray-800 overflow-x-auto"></div>
     <div id="tabContent" class="p-4"></div>
   </div>
 
-  <p class="text-xs text-gray-400 mt-4 text-center">
+  <p class="text-xs text-gray-500 mt-4 text-center">
     Si abriste este archivo con doble-click (file://) y el fetch falla por CORS, serví la carpeta con
     <code>python -m http.server 8080</code> y abrí <code>http://localhost:8080/dashboard.html</code>.
   </p>
@@ -70,23 +79,32 @@
 let SPEC = null;
 const DEFAULT_BASE_URL = "http://127.0.0.1:8000";
 
-// Colores diferenciales por producto: azul / violeta / verde
+// Colores diferenciales por producto: azul / purplea / verde. `light`/`text` están
+// pensados para el fondo oscuro del panel (franja translúcida + texto claro), no
+// para un fondo blanco.
 const CASES = [
   { key: "pricing", label: "DynamicPricing · Precios", inferPath: "/api/v1/dynamic-pricing/price", hasTrain: false, hasDatasets: false,
     desc: "Fijación dinámica de precios: a partir del costo base, precio actual y el historial de compras a distintos precios de cada SKU, estima la elasticidad precio-demanda (regresión log-log) y recomienda el precio que maximiza margen o volumen, dentro de un margen mínimo y una variación diaria máxima. Sin entrenamiento: cada request se resuelve de punta a punta con los datos que trae.",
-    color: { base: "#2563eb", dark: "#1d4ed8", light: "#eff6ff", text: "#1e40af" } }, // azul
+    color: { base: "#2563eb", dark: "#1d4ed8", light: "rgba(37,99,235,.12)", text: "#93c5fd" } }, // azul
   { key: "route", label: "SmartRoute · Rutas", inferPath: "/api/v1/smart-route/plan-routes", hasTrain: false, hasDatasets: false,
     desc: "Ruteo y despacho last-mile: a partir del depósito, las paradas (ubicación, demanda, ventana horaria) y la flota disponible (capacidad, velocidad), arma las rutas por vehículo (ahorro de Clarke-Wright + mejora 2-opt) respetando capacidad y ventanas horarias. Sin entrenamiento: cada request es un problema de optimización combinatoria resuelto de punta a punta.",
-    color: { base: "#7c3aed", dark: "#6d28d9", light: "#f5f3ff", text: "#5b21b6" } }, // violeta
+    color: { base: "#7c3aed", dark: "#6d28d9", light: "rgba(124,58,237,.14)", text: "#c4b5fd" } }, // purplea
   { key: "lead", label: "LeadMatch · Leads", inferPath: "/api/v1/lead-match/match", trainPath: "/api/v1/lead-match/train", hasTrain: true, hasDatasets: true,
     desc: "Scoring y asignación de leads: puntúa la probabilidad de conversión de cada lead (regresión logística entrenada con el histórico de la empresa, o una heurística de respaldo si todavía no se entrenó nada) y los asigna a vendedores disponibles maximizando el valor esperado total (algoritmo húngaro, respetando capacidad y afinidad por especialidad).",
-    color: { base: "#16a34a", dark: "#15803d", light: "#f0fdf4", text: "#166534" } }, // verde
+    color: { base: "#16a34a", dark: "#15803d", light: "rgba(22,163,74,.12)", text: "#86efac" } }, // verde
 ];
 let activeTab = "pricing";
 let activeSubtab = {}; // per case
 
 function baseUrl() { return DEFAULT_BASE_URL; }
 function apiKey() { return document.getElementById("apiKey").value.trim(); }
+function toggleApiKeyVisibility() {
+  const input = document.getElementById("apiKey");
+  const btn = document.getElementById("apiKeyToggle");
+  const show = input.type === "password";
+  input.type = show ? "text" : "password";
+  btn.textContent = show ? "🙈" : "👁";
+}
 function headers(json) {
   const h = { "X-API-Key": apiKey() };
   if (json) h["Content-Type"] = "application/json";
@@ -229,8 +247,8 @@ function buildTabs() {
     const btn = document.createElement("button");
     btn.className = "tab-btn px-4 py-3 text-sm whitespace-nowrap" + (isActive ? " active" : "");
     btn.style.borderBottomColor = isActive ? c.color.base : "transparent";
-    btn.style.color = isActive ? c.color.text : "#6b7280";
-    btn.style.backgroundColor = isActive ? "#ffffffcc" : "transparent";
+    btn.style.color = isActive ? c.color.text : "#64748b";
+    btn.style.backgroundColor = isActive ? c.color.light : "transparent";
     btn.textContent = c.label;
     btn.onclick = () => { activeTab = c.key; buildTabs(); };
     bar.appendChild(btn);
@@ -253,7 +271,7 @@ function render() {
 
   function subBtnStyle(name) {
     const isActive = sub === name;
-    return `background-color:${isActive ? c.light : '#f3f4f6'};color:${isActive ? c.text : '#374151'};border:1px solid ${isActive ? c.base : 'transparent'}`;
+    return `background-color:${isActive ? c.light : '#1e293b'};color:${isActive ? c.text : '#94a3b8'};border:1px solid ${isActive ? c.base : 'transparent'}`;
   }
 
   const subLabels = {
@@ -268,14 +286,14 @@ function render() {
   const subtabLabels = { infer: "Probar", train: "Entrenar", datasets: "Datasets" };
 
   content.innerHTML = `
-    <div class="rounded-lg p-3 mb-4" style="background-color:#ffffffcc; border-left:5px solid ${c.base}">
+    <div class="rounded-lg p-3 mb-4" style="background-color:rgba(255,255,255,.04); border-left:5px solid ${c.base}">
       <div class="text-sm font-bold mb-1" style="color:${c.text}">${caseDef.label}</div>
-      <div class="text-xs" style="color:${c.text}">${caseDef.desc}</div>
+      <div class="text-xs text-gray-300">${caseDef.desc}</div>
     </div>
     <div class="flex gap-2 mb-2 flex-wrap">
       ${subtabs.map(s => `<button class="subtab-btn text-sm px-3 py-1.5 rounded" style="${subBtnStyle(s)}" onclick="setSubtab('${caseDef.key}','${s}')">${subtabLabels[s]}</button>`).join("")}
     </div>
-    <p class="text-xs text-gray-500 mb-4 italic">${subLabels[sub]}</p>
+    <p class="text-xs text-gray-400 mb-4 italic">${subLabels[sub]}</p>
     <div id="subtabContent"></div>
   `;
 
@@ -297,20 +315,20 @@ function renderInfer(caseDef) {
 
   const container = document.getElementById("subtabContent");
   container.innerHTML = `
-    <div class="text-xs text-gray-500 mb-2">POST <code>${caseDef.inferPath}</code></div>
+    <div class="text-xs text-gray-400 mb-2">POST <code>${caseDef.inferPath}</code></div>
     ${queryParams.length ? `<div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">${queryParams.map(p => `
       <div>
-        <label class="text-xs font-semibold text-gray-500">${p.name}${p.required ? " *" : ""}</label>
-        <input id="qp_${caseDef.key}_${p.name}" type="text" value="${p.schema && p.schema.default !== undefined ? p.schema.default : "0"}" class="w-full border rounded px-2 py-1 text-sm">
+        <label class="text-xs font-semibold text-gray-400">${p.name}${p.required ? " *" : ""}</label>
+        <input id="qp_${caseDef.key}_${p.name}" type="text" value="${p.schema && p.schema.default !== undefined ? p.schema.default : "0"}" class="w-full border rounded px-2 py-1 text-sm bg-gray-800 border-gray-700 text-gray-100">
       </div>`).join("")}</div>` : ""}
-    <label class="text-xs font-semibold text-gray-500">Body (JSON, editable)</label>
-    <textarea id="body_${caseDef.key}" rows="14" class="w-full border rounded p-2 mt-1" style="border-color:${c.base}55">${JSON.stringify(example, null, 2)}</textarea>
+    <label class="text-xs font-semibold text-gray-400">Body (JSON, editable)</label>
+    <textarea id="body_${caseDef.key}" rows="14" class="w-full border rounded p-2 mt-1 bg-gray-900 text-green-200" style="border-color:${c.base}55">${JSON.stringify(example, null, 2)}</textarea>
     <div class="flex items-center gap-2 mt-2">
       <button onclick="sendInfer('${caseDef.key}')" class="text-white text-sm font-medium px-4 py-1.5 rounded" style="background-color:${c.base}" onmouseover="this.style.backgroundColor='${c.dark}'" onmouseout="this.style.backgroundColor='${c.base}'">Enviar</button>
       <span id="infer_status_${caseDef.key}"></span>
     </div>
     <div class="mt-3">
-      <label class="text-xs font-semibold text-gray-500">Respuesta</label>
+      <label class="text-xs font-semibold text-gray-400">Respuesta</label>
       <pre id="infer_resp_${caseDef.key}" class="text-xs p-3 rounded mt-1 min-h-[80px]" style="${respBoxStyle(c)}"></pre>
     </div>
   `;
@@ -341,10 +359,10 @@ async function sendInfer(caseKey) {
     const res = await fetch(url, { method: "POST", headers: headers(true), body: JSON.stringify(bodyObj) });
     const ms = (performance.now() - t0).toFixed(0);
     const data = await res.json().catch(() => ({}));
-    statusEl.innerHTML = `<span class="${res.ok ? 'text-green-600' : 'text-red-600'} text-sm font-medium">HTTP ${res.status} · ${ms} ms</span>`;
+    statusEl.innerHTML = `<span class="${res.ok ? 'text-green-400' : 'text-red-400'} text-sm font-medium">HTTP ${res.status} · ${ms} ms</span>`;
     respEl.innerHTML = syntaxHighlight(data, caseDef.color);
   } catch (e) {
-    statusEl.innerHTML = '<span class="text-red-600 text-sm">Error de red: ' + e.message + '</span>';
+    statusEl.innerHTML = '<span class="text-red-400 text-sm">Error de red: ' + e.message + '</span>';
   }
 }
 
@@ -354,15 +372,15 @@ function renderTrain(caseDef) {
   const example = bodySchema ? exampleFromSchema(bodySchema) : {};
   const container = document.getElementById("subtabContent");
   container.innerHTML = `
-    <div class="text-xs text-gray-500 mb-2">POST <code>${caseDef.trainPath}</code></div>
-    <label class="text-xs font-semibold text-gray-500">Body (JSON, editable) — poné el dataset_id de un dataset ya subido (pestaña Datasets)</label>
-    <textarea id="train_body_${caseDef.key}" rows="6" class="w-full border rounded p-2 mt-1" style="border-color:${c.base}55">${JSON.stringify(example, null, 2)}</textarea>
+    <div class="text-xs text-gray-400 mb-2">POST <code>${caseDef.trainPath}</code></div>
+    <label class="text-xs font-semibold text-gray-400">Body (JSON, editable) — poné el dataset_id de un dataset ya subido (pestaña Datasets)</label>
+    <textarea id="train_body_${caseDef.key}" rows="6" class="w-full border rounded p-2 mt-1 bg-gray-900 text-green-200" style="border-color:${c.base}55">${JSON.stringify(example, null, 2)}</textarea>
     <div class="flex items-center gap-2 mt-2">
       <button onclick="sendTrain('${caseDef.key}')" class="text-white text-sm font-medium px-4 py-1.5 rounded" style="background-color:${c.base}" onmouseover="this.style.backgroundColor='${c.dark}'" onmouseout="this.style.backgroundColor='${c.base}'">Entrenar</button>
       <span id="train_status_${caseDef.key}"></span>
     </div>
     <div class="mt-3">
-      <label class="text-xs font-semibold text-gray-500">Respuesta</label>
+      <label class="text-xs font-semibold text-gray-400">Respuesta</label>
       <pre id="train_resp_${caseDef.key}" class="text-xs p-3 rounded mt-1 min-h-[80px]" style="${respBoxStyle(c)}"></pre>
     </div>
   `;
@@ -382,10 +400,10 @@ async function sendTrain(caseKey) {
     const res = await fetch(baseUrl() + caseDef.trainPath, { method: "POST", headers: headers(true), body: JSON.stringify(bodyObj) });
     const ms = ((performance.now() - t0) / 1000).toFixed(1);
     const data = await res.json().catch(() => ({}));
-    statusEl.innerHTML = `<span class="${res.ok ? 'text-green-600' : 'text-red-600'} text-sm font-medium">HTTP ${res.status} · ${ms} s</span>`;
+    statusEl.innerHTML = `<span class="${res.ok ? 'text-green-400' : 'text-red-400'} text-sm font-medium">HTTP ${res.status} · ${ms} s</span>`;
     respEl.innerHTML = syntaxHighlight(data, caseDef.color);
   } catch (e) {
-    statusEl.innerHTML = '<span class="text-red-600 text-sm">Error de red: ' + e.message + '</span>';
+    statusEl.innerHTML = '<span class="text-red-400 text-sm">Error de red: ' + e.message + '</span>';
   }
 }
 
@@ -394,12 +412,12 @@ function renderDatasets(caseDef) {
   const caseTypeValue = resolveCaseTypeEnum()[0] || "lead_match";
   const container = document.getElementById("subtabContent");
   container.innerHTML = `
-    <div class="mb-3 text-xs text-gray-500">case = <code>${caseTypeValue}</code></div>
+    <div class="mb-3 text-xs text-gray-400">case = <code>${caseTypeValue}</code></div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div class="border rounded p-3" style="border-color:${c.base}55">
         <h3 class="font-semibold text-sm mb-2" style="color:${c.text}">Subir dataset</h3>
-        <p class="text-xs text-gray-500 mb-2">Columnas esperadas: lead_id, origin, time_on_site_minutes, company_size, rep_id, converted</p>
+        <p class="text-xs text-gray-400 mb-2">Columnas esperadas: lead_id, origin, time_on_site_minutes, company_size, rep_id, converted</p>
         <input type="file" id="ds_file_${caseDef.key}" class="text-sm mb-2 block">
         <button onclick="uploadDataset('${caseDef.key}','${caseTypeValue}')" class="text-white text-sm px-3 py-1.5 rounded" style="background-color:${c.base}">Subir</button>
         <div id="ds_upload_status_${caseDef.key}" class="text-xs mt-2"></div>
@@ -407,7 +425,7 @@ function renderDatasets(caseDef) {
 
       <div class="border rounded p-3" style="border-color:${c.base}55">
         <h3 class="font-semibold text-sm mb-2" style="color:${c.text}">Preview de dataset</h3>
-        <input type="text" id="ds_preview_id_${caseDef.key}" placeholder="dataset_id" class="border rounded px-2 py-1 text-sm w-full mb-2">
+        <input type="text" id="ds_preview_id_${caseDef.key}" placeholder="dataset_id" class="border rounded px-2 py-1 text-sm w-full mb-2 bg-gray-800 border-gray-700 text-gray-100">
         <button onclick="previewDataset('${caseDef.key}','${caseTypeValue}')" class="text-white text-sm px-3 py-1.5 rounded" style="background-color:${c.dark}">Preview</button>
       </div>
     </div>
@@ -446,9 +464,9 @@ async function uploadDataset(caseKey, caseTypeValue) {
       body: fd
     });
     const data = await res.json().catch(() => ({}));
-    statusEl.innerHTML = `<span class="${res.ok ? 'text-green-600' : 'text-red-600'}">HTTP ${res.status}</span><pre class="text-xs mt-1">${JSON.stringify(data, null, 2)}</pre>`;
+    statusEl.innerHTML = `<span class="${res.ok ? 'text-green-400' : 'text-red-400'}">HTTP ${res.status}</span><pre class="text-xs mt-1">${JSON.stringify(data, null, 2)}</pre>`;
   } catch (e) {
-    statusEl.innerHTML = '<span class="text-red-600">Error: ' + e.message + '</span>';
+    statusEl.innerHTML = '<span class="text-red-400">Error: ' + e.message + '</span>';
   }
 }
 
