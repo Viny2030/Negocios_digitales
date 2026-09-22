@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Panel de Pruebas - Algoritmos Prescriptivos</title>
+<title>Panel de Pruebas - DynamicPricing / SmartRoute / LeadMatch</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css">
 <style>
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
@@ -23,8 +23,8 @@
   <div class="bg-white rounded-lg shadow p-4 mb-4">
     <div class="flex items-center justify-between flex-wrap gap-2">
       <div>
-        <h1 class="text-xl font-bold text-gray-900">Panel de Pruebas — Algoritmos Prescriptivos</h1>
-        <p class="text-sm text-gray-500">Datasets, entrenamiento e inferencia contra <code id="baseUrlLabel"></code> (se auto-configura leyendo <code>/openapi.json</code>).</p>
+        <h1 class="text-xl font-bold text-gray-900">Panel de Pruebas — DynamicPricing · SmartRoute · LeadMatch</h1>
+        <p class="text-sm text-gray-500">Prueba manual contra <code id="baseUrlLabel"></code> (se auto-configura leyendo <code>/openapi.json</code>).</p>
       </div>
       <div id="healthDot" class="flex items-center gap-2 text-sm">
         <span class="w-3 h-3 rounded-full bg-gray-300 inline-block" id="healthCircle"></span>
@@ -38,9 +38,9 @@
         <span id="helpArrow">▸</span>
       </button>
       <div id="helpBody" class="hidden px-4 pb-3 text-sm text-gray-600 space-y-2 border-t pt-2">
-        <p>Esta plataforma tiene <strong>4 modelos de IA (Reinforcement Learning)</strong>, uno por caso de negocio. Cada empresa cliente tiene su propia API key y sus propios modelos entrenados — la key identifica a qué empresa pertenecen los datos y las recomendaciones.</p>
-        <p><strong>Pasos:</strong> 1) Pedí tu API key al equipo (identifica tu empresa). 2) Pegala arriba y tocá "Conectar y cargar API" — esto lee la documentación técnica de la API y arma los formularios automáticamente. 3) Elegí la pestaña del caso que querés probar. 4) Dentro de esa pestaña: <em>Datasets</em> para subir tus datos históricos, <em>Entrenar</em> para generar un modelo con esos datos, y <em>Probar inferencia</em> para pedirle una recomendación al modelo ya entrenado con datos de ejemplo (editá el JSON con datos reales de tu negocio).</p>
-        <p><strong>Cómo leer una respuesta:</strong> <code>rationale</code> explica en lenguaje simple por qué el modelo recomendó eso. <code>constraints_applied</code> muestra qué reglas de negocio (límites, políticas) ajustaron la sugerencia cruda del modelo. Campos como <code>expected_value</code>, <code>priority_score</code> o <code>false_positive_probability</code> son puntajes de confianza del modelo — sirven para priorizar, no son una garantía absoluta.</p>
+        <p>Esta plataforma tiene <strong>3 productos</strong>, cada empresa cliente con su propia API key. <strong>DynamicPricing</strong> y <strong>SmartRoute</strong> son stateless: cada request se resuelve de punta a punta con los datos que trae (optimización matemática, sin modelo que entrenar). <strong>LeadMatch</strong> sí entrena un clasificador por empresa a partir de un dataset subido; mientras no haya uno entrenado, usa una heurística de respaldo.</p>
+        <p><strong>Pasos:</strong> 1) Pedí tu API key al equipo (identifica tu empresa). 2) Pegala arriba y tocá "Conectar y cargar API" — esto lee la documentación técnica de la API y arma los formularios automáticamente. 3) Elegí la pestaña del producto que querés probar. 4) Para LeadMatch, además de <em>Probar</em> tenés <em>Entrenar</em> y <em>Datasets</em> para subir tu histórico de leads.</p>
+        <p><strong>Cómo leer una respuesta:</strong> los campos JSON siguen el schema documentado en <code>/docs</code>. En LeadMatch, <code>used_default_scoring: true</code> indica que todavía no hay modelo entrenado para esa empresa y se usó la heurística de respaldo.</p>
       </div>
     </div>
 
@@ -70,22 +70,19 @@
 let SPEC = null;
 const DEFAULT_BASE_URL = "http://127.0.0.1:8000";
 
-// Colores diferenciales por caso: azul / violeta / amarillo / verde
+// Colores diferenciales por producto: azul / violeta / verde
 const CASES = [
-  { key: "case1", label: "Case 1 · Messaging", matchHints: ["1", "messag"], inferPath: "/api/v1/case1/recommend-next-touchpoint", trainPath: "/api/v1/case1/train",
-    desc: "Secuenciación de mensajes: dado el historial de contacto de un prospecto (canales usados, respuestas, días desde el último contacto, etapa de compra), recomienda el próximo canal a usar (email, SMS, push, llamada o retargeting) sin saturarlo. Modelo: DQN.",
+  { key: "pricing", label: "DynamicPricing · Precios", inferPath: "/api/v1/dynamic-pricing/price", hasTrain: false, hasDatasets: false,
+    desc: "Fijación dinámica de precios: a partir del costo base, precio actual y el historial de compras a distintos precios de cada SKU, estima la elasticidad precio-demanda (regresión log-log) y recomienda el precio que maximiza margen o volumen, dentro de un margen mínimo y una variación diaria máxima. Sin entrenamiento: cada request se resuelve de punta a punta con los datos que trae.",
     color: { base: "#2563eb", dark: "#1d4ed8", light: "#eff6ff", text: "#1e40af" } }, // azul
-  { key: "case2", label: "Case 2 · Pricing", matchHints: ["2", "pric"], inferPath: "/api/v1/case2/get-price", trainPath: "/api/v1/case2/train",
-    desc: "Pricing dinámico: ajusta el precio base de un producto según demanda, nivel de inventario y precio de la competencia, respetando un margen mínimo. Revisado por un gate de equidad (fairness) antes de aplicarse. Modelo: PPO.",
+  { key: "route", label: "SmartRoute · Rutas", inferPath: "/api/v1/smart-route/plan-routes", hasTrain: false, hasDatasets: false,
+    desc: "Ruteo y despacho last-mile: a partir del depósito, las paradas (ubicación, demanda, ventana horaria) y la flota disponible (capacidad, velocidad), arma las rutas por vehículo (ahorro de Clarke-Wright + mejora 2-opt) respetando capacidad y ventanas horarias. Sin entrenamiento: cada request es un problema de optimización combinatoria resuelto de punta a punta.",
     color: { base: "#7c3aed", dark: "#6d28d9", light: "#f5f3ff", text: "#5b21b6" } }, // violeta
-  { key: "case3", label: "Case 3 · Anomaly", matchHints: ["3", "anomal"], inferPath: "/api/v1/case3/alert-webhook", trainPath: "/api/v1/case3/train",
-    desc: "Triaje de anomalías: recibe una alerta (ej. caída de una métrica de negocio) y decide qué acción tomar (crear ticket, fusionar con otra, descartar), filtrando falsos positivos con un clasificador entrenado aparte del modelo principal. Modelo: DQN + clasificador de falsos positivos.",
-    color: { base: "#ca8a04", dark: "#a16207", light: "#fefce8", text: "#854d0e" } }, // amarillo
-  { key: "case4", label: "Case 4 · Accelerator", matchHints: ["4", "acceler"], inferPath: "/api/v1/case4/allocate", trainPath: "/api/v1/case4/train",
-    desc: "Asignación de recursos de aceleradora: reparte recursos limitados (horas de mentoría, capital de seguimiento, conexiones estratégicas) entre un portfolio de startups, maximizando el valor esperado según su tracción, equipo y mercado. Modelo: PPO.",
+  { key: "lead", label: "LeadMatch · Leads", inferPath: "/api/v1/lead-match/match", trainPath: "/api/v1/lead-match/train", hasTrain: true, hasDatasets: true,
+    desc: "Scoring y asignación de leads: puntúa la probabilidad de conversión de cada lead (regresión logística entrenada con el histórico de la empresa, o una heurística de respaldo si todavía no se entrenó nada) y los asigna a vendedores disponibles maximizando el valor esperado total (algoritmo húngaro, respetando capacidad y afinidad por especialidad).",
     color: { base: "#16a34a", dark: "#15803d", light: "#f0fdf4", text: "#166534" } }, // verde
 ];
-let activeTab = "case1";
+let activeTab = "pricing";
 let activeSubtab = {}; // per case
 
 function baseUrl() { return DEFAULT_BASE_URL; }
@@ -94,9 +91,6 @@ function headers(json) {
   const h = { "X-API-Key": apiKey() };
   if (json) h["Content-Type"] = "application/json";
   return h;
-}
-function caseColor(caseKey) {
-  return CASES.find(c => c.key === caseKey).color;
 }
 
 // Resalta un JSON con el color del caso (claves en el color del caso, strings/números/bools en tonos fijos)
@@ -208,14 +202,7 @@ function getQueryParams(path, method) {
 
 function resolveCaseTypeEnum() {
   const schema = SPEC && SPEC.components && SPEC.components.schemas && SPEC.components.schemas.CaseType;
-  return (schema && schema.enum) || [];
-}
-
-function matchCaseTypeValue(caseDef, enumValues) {
-  const keywordHint = caseDef.matchHints.find(h => isNaN(h));
-  let best = enumValues.find(v => keywordHint && String(v).toLowerCase().includes(keywordHint));
-  if (!best) best = enumValues.find(v => String(v).toLowerCase().includes(caseDef.matchHints[0]));
-  return best || enumValues[0] || caseDef.key;
+  return (schema && schema.enum) || ["lead_match"];
 }
 
 async function init() {
@@ -257,8 +244,6 @@ function render() {
   const sub = activeSubtab[activeTab] || "infer";
   activeSubtab[activeTab] = sub;
 
-  const enumValues = resolveCaseTypeEnum();
-  const caseTypeValue = matchCaseTypeValue(caseDef, enumValues);
   const c = caseDef.color;
 
   const panel = document.getElementById("tabPanel");
@@ -272,10 +257,15 @@ function render() {
   }
 
   const subLabels = {
-    infer: "Probar inferencia — pedile al modelo ya entrenado que resuelva un caso puntual con datos de ejemplo (editables).",
-    train: "Entrenar — genera/actualiza el modelo de este caso con un dataset subido previamente.",
-    datasets: "Datasets — subí, listá o previsualizá los datos históricos que usa este caso para entrenar."
+    infer: "Probar — envía un request de ejemplo (editable) contra el endpoint del producto.",
+    train: "Entrenar — genera/actualiza el clasificador de conversión de esta empresa con un dataset subido previamente.",
+    datasets: "Datasets — subí, listá o previsualizá el histórico de leads que usa LeadMatch para entrenar."
   };
+
+  const subtabs = ["infer"];
+  if (caseDef.hasTrain) subtabs.push("train");
+  if (caseDef.hasDatasets) subtabs.push("datasets");
+  const subtabLabels = { infer: "Probar", train: "Entrenar", datasets: "Datasets" };
 
   content.innerHTML = `
     <div class="rounded-lg p-3 mb-4" style="background-color:#ffffffcc; border-left:5px solid ${c.base}">
@@ -283,9 +273,7 @@ function render() {
       <div class="text-xs" style="color:${c.text}">${caseDef.desc}</div>
     </div>
     <div class="flex gap-2 mb-2 flex-wrap">
-      <button class="subtab-btn text-sm px-3 py-1.5 rounded" style="${subBtnStyle('infer')}" onclick="setSubtab('${caseDef.key}','infer')">Probar inferencia</button>
-      <button class="subtab-btn text-sm px-3 py-1.5 rounded" style="${subBtnStyle('train')}" onclick="setSubtab('${caseDef.key}','train')">Entrenar</button>
-      <button class="subtab-btn text-sm px-3 py-1.5 rounded" style="${subBtnStyle('datasets')}" onclick="setSubtab('${caseDef.key}','datasets')">Datasets</button>
+      ${subtabs.map(s => `<button class="subtab-btn text-sm px-3 py-1.5 rounded" style="${subBtnStyle(s)}" onclick="setSubtab('${caseDef.key}','${s}')">${subtabLabels[s]}</button>`).join("")}
     </div>
     <p class="text-xs text-gray-500 mb-4 italic">${subLabels[sub]}</p>
     <div id="subtabContent"></div>
@@ -293,7 +281,7 @@ function render() {
 
   if (sub === "infer") renderInfer(caseDef);
   else if (sub === "train") renderTrain(caseDef);
-  else renderDatasets(caseDef, caseTypeValue, enumValues);
+  else renderDatasets(caseDef);
 }
 
 function setSubtab(caseKey, sub) {
@@ -324,11 +312,6 @@ function renderInfer(caseDef) {
     <div class="mt-3">
       <label class="text-xs font-semibold text-gray-500">Respuesta</label>
       <pre id="infer_resp_${caseDef.key}" class="text-xs p-3 rounded mt-1 min-h-[80px]" style="${respBoxStyle(c)}"></pre>
-      <p class="text-xs text-gray-400 mt-1">
-        <code>rationale</code> = explicación en lenguaje simple de por qué se sugiere esto ·
-        <code>constraints_applied</code> = reglas de negocio que ajustaron la salida cruda del modelo ·
-        los campos numéricos de "confianza" (expected_value, priority_score, false_positive_probability) sirven para priorizar, no son certezas absolutas.
-      </p>
     </div>
   `;
 }
@@ -372,10 +355,10 @@ function renderTrain(caseDef) {
   const container = document.getElementById("subtabContent");
   container.innerHTML = `
     <div class="text-xs text-gray-500 mb-2">POST <code>${caseDef.trainPath}</code></div>
-    <label class="text-xs font-semibold text-gray-500">Body (JSON, editable) — ajustá dataset_id / timesteps según tu schema real</label>
-    <textarea id="train_body_${caseDef.key}" rows="10" class="w-full border rounded p-2 mt-1" style="border-color:${c.base}55">${JSON.stringify(example, null, 2)}</textarea>
+    <label class="text-xs font-semibold text-gray-500">Body (JSON, editable) — poné el dataset_id de un dataset ya subido (pestaña Datasets)</label>
+    <textarea id="train_body_${caseDef.key}" rows="6" class="w-full border rounded p-2 mt-1" style="border-color:${c.base}55">${JSON.stringify(example, null, 2)}</textarea>
     <div class="flex items-center gap-2 mt-2">
-      <button onclick="sendTrain('${caseDef.key}')" class="text-white text-sm font-medium px-4 py-1.5 rounded" style="background-color:${c.base}" onmouseover="this.style.backgroundColor='${c.dark}'" onmouseout="this.style.backgroundColor='${c.base}'">Entrenar (puede tardar)</button>
+      <button onclick="sendTrain('${caseDef.key}')" class="text-white text-sm font-medium px-4 py-1.5 rounded" style="background-color:${c.base}" onmouseover="this.style.backgroundColor='${c.dark}'" onmouseout="this.style.backgroundColor='${c.base}'">Entrenar</button>
       <span id="train_status_${caseDef.key}"></span>
     </div>
     <div class="mt-3">
@@ -406,49 +389,42 @@ async function sendTrain(caseKey) {
   }
 }
 
-function renderDatasets(caseDef, caseTypeValue, enumValues) {
+function renderDatasets(caseDef) {
   const c = caseDef.color;
+  const caseTypeValue = resolveCaseTypeEnum()[0] || "lead_match";
   const container = document.getElementById("subtabContent");
   container.innerHTML = `
-    <div class="mb-3">
-      <label class="text-xs font-semibold text-gray-500">case_type (path param)</label>
-      <select id="ds_case_${caseDef.key}" class="border rounded px-2 py-1 text-sm ml-2">
-        ${enumValues.map(v => `<option value="${v}" ${v === caseTypeValue ? "selected" : ""}>${v}</option>`).join("")}
-      </select>
-    </div>
+    <div class="mb-3 text-xs text-gray-500">case = <code>${caseTypeValue}</code></div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div class="border rounded p-3" style="border-color:${c.base}55">
         <h3 class="font-semibold text-sm mb-2" style="color:${c.text}">Subir dataset</h3>
+        <p class="text-xs text-gray-500 mb-2">Columnas esperadas: lead_id, origin, time_on_site_minutes, company_size, rep_id, converted</p>
         <input type="file" id="ds_file_${caseDef.key}" class="text-sm mb-2 block">
-        <button onclick="uploadDataset('${caseDef.key}')" class="text-white text-sm px-3 py-1.5 rounded" style="background-color:${c.base}">Subir</button>
+        <button onclick="uploadDataset('${caseDef.key}','${caseTypeValue}')" class="text-white text-sm px-3 py-1.5 rounded" style="background-color:${c.base}">Subir</button>
         <div id="ds_upload_status_${caseDef.key}" class="text-xs mt-2"></div>
       </div>
 
       <div class="border rounded p-3" style="border-color:${c.base}55">
         <h3 class="font-semibold text-sm mb-2" style="color:${c.text}">Preview de dataset</h3>
         <input type="text" id="ds_preview_id_${caseDef.key}" placeholder="dataset_id" class="border rounded px-2 py-1 text-sm w-full mb-2">
-        <button onclick="previewDataset('${caseDef.key}')" class="text-white text-sm px-3 py-1.5 rounded" style="background-color:${c.dark}">Preview</button>
+        <button onclick="previewDataset('${caseDef.key}','${caseTypeValue}')" class="text-white text-sm px-3 py-1.5 rounded" style="background-color:${c.dark}">Preview</button>
       </div>
     </div>
 
     <div class="mt-4">
-      <button onclick="listDatasets('${caseDef.key}')" class="text-sm px-3 py-1.5 rounded" style="background-color:${c.light};color:${c.text};border:1px solid ${c.base}55">Listar datasets</button>
+      <button onclick="listDatasets('${caseDef.key}','${caseTypeValue}')" class="text-sm px-3 py-1.5 rounded" style="background-color:${c.light};color:${c.text};border:1px solid ${c.base}55">Listar datasets</button>
       <pre id="ds_list_${caseDef.key}" class="text-xs p-3 rounded mt-2 min-h-[60px]" style="${respBoxStyle(c)}"></pre>
     </div>
   `;
 }
 
-function dsCaseValue(caseKey) {
-  return document.getElementById("ds_case_" + caseKey).value;
-}
-
-async function listDatasets(caseKey) {
+async function listDatasets(caseKey, caseTypeValue) {
   const caseDef = CASES.find(c => c.key === caseKey);
   const el = document.getElementById("ds_list_" + caseKey);
   el.textContent = "cargando...";
   try {
-    const res = await fetch(`${baseUrl()}/api/v1/datasets/${dsCaseValue(caseKey)}`, { headers: headers(false) });
+    const res = await fetch(`${baseUrl()}/api/v1/datasets/${caseTypeValue}`, { headers: headers(false) });
     const data = await res.json().catch(() => ({}));
     el.innerHTML = `HTTP ${res.status}\n` + syntaxHighlight(data, caseDef.color);
   } catch (e) {
@@ -456,7 +432,7 @@ async function listDatasets(caseKey) {
   }
 }
 
-async function uploadDataset(caseKey) {
+async function uploadDataset(caseKey, caseTypeValue) {
   const statusEl = document.getElementById("ds_upload_status_" + caseKey);
   const fileInput = document.getElementById("ds_file_" + caseKey);
   if (!fileInput.files.length) { statusEl.textContent = "Elegí un archivo primero."; return; }
@@ -464,7 +440,7 @@ async function uploadDataset(caseKey) {
   fd.append("file", fileInput.files[0]);
   statusEl.innerHTML = '<span class="spinner"></span> subiendo...';
   try {
-    const res = await fetch(`${baseUrl()}/api/v1/datasets/${dsCaseValue(caseKey)}`, {
+    const res = await fetch(`${baseUrl()}/api/v1/datasets/${caseTypeValue}`, {
       method: "POST",
       headers: { "X-API-Key": apiKey() },
       body: fd
@@ -476,14 +452,14 @@ async function uploadDataset(caseKey) {
   }
 }
 
-async function previewDataset(caseKey) {
+async function previewDataset(caseKey, caseTypeValue) {
   const caseDef = CASES.find(c => c.key === caseKey);
   const id = document.getElementById("ds_preview_id_" + caseKey).value.trim();
   if (!id) { alert("Ingresá un dataset_id (mirá la lista de arriba)"); return; }
   const el = document.getElementById("ds_list_" + caseKey);
   el.textContent = "cargando preview...";
   try {
-    const res = await fetch(`${baseUrl()}/api/v1/datasets/${dsCaseValue(caseKey)}/${id}/preview`, { headers: headers(false) });
+    const res = await fetch(`${baseUrl()}/api/v1/datasets/${caseTypeValue}/${id}/preview`, { headers: headers(false) });
     const data = await res.json().catch(() => ({}));
     el.innerHTML = `HTTP ${res.status}\n` + syntaxHighlight(data, caseDef.color);
   } catch (e) {

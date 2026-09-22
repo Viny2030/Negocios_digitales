@@ -9,26 +9,10 @@ services:
       - DATABASE_URL=postgresql://prescriptive:prescriptive@db:5432/prescriptive
       - DATASETS_DIR=/app/storage/datasets
       - MODELS_DIR=/app/storage/models
-      - REDIS_URL=redis://redis:6379/0
     volumes:
       - ./storage:/app/storage
     depends_on:
       - db
-      - redis
-
-  worker:
-    build: .
-    command: celery -A celery_app worker --loglevel=info
-    environment:
-      - DATABASE_URL=postgresql://prescriptive:prescriptive@db:5432/prescriptive
-      - DATASETS_DIR=/app/storage/datasets
-      - MODELS_DIR=/app/storage/models
-      - REDIS_URL=redis://redis:6379/0
-    volumes:
-      - ./storage:/app/storage
-    depends_on:
-      - db
-      - redis
 
   db:
     image: postgres:16
@@ -40,11 +24,6 @@ services:
       - pgdata:/var/lib/postgresql/data
     ports:
       - "5432:5432"
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
 
 volumes:
   pgdata:

@@ -40,38 +40,13 @@ settings = get_settings()
 # seguro que se subió el dataset equivocado (p.ej. el de case1 al endpoint de case2) y
 # antes quedaba igual aceptado como "validated". Ver MIN_MATCHING_COLUMNS.
 EXPECTED_COLUMNS: dict[CaseType, set[str]] = {
-    CaseType.case1_messaging: {
-        "prospect_id",
-        "channels_contacted",
-        "messages_received",
-        "responses_count",
-        "days_since_last_contact",
-        "purchase_stage",
-        "unsubscribed",
-    },
-    CaseType.case2_pricing: {
-        "product_id",
-        "base_cost",
-        "user_segment",
-        "inventory_level_pct",
-        "competitor_avg_price",
-        "demand_index",
-    },
-    CaseType.case3_anomaly: {
-        "alert_id",
-        "metric_name",
-        "z_score",
-        "pct_change",
-        "historical_similar_count",
-        "estimated_financial_impact",
-        "is_false_positive",
-    },
-    CaseType.case4_accelerator: {
-        "startup_id",
-        "traction_score",
-        "team_score",
-        "market_score",
-        "runway_months",
+    CaseType.lead_match: {
+        "lead_id",
+        "origin",
+        "time_on_site_minutes",
+        "company_size",
+        "rep_id",
+        "converted",
     },
 }
 MIN_MATCHING_COLUMNS = 2

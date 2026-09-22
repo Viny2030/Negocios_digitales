@@ -27,4 +27,4 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["app", "config", "database", "security", "model_registry", "celery_app", "rate_limit"]
+known-first-party = ["app", "config", "database", "security", "model_registry", "rate_limit"]

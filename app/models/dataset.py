@@ -1,5 +1,14 @@
-"""Modelo de Dataset subido por una empresa para un caso (1, 2 o 3).
-El archivo físico (csv/parquet) se guarda en DATASETS_DIR y se referencia por path."""
+"""Modelo de Dataset subido por una empresa para un caso.
+El archivo físico (csv/parquet) se guarda en DATASETS_DIR y se referencia por path.
+
+AGREGADO 2026-09-22: se reemplazaron los 4 casos originales (mensajería, pricing RL,
+anomalías, acelerador) por los 3 productos de la plataforma actual. Solo `lead_match`
+(LeadMatch Engine) tiene entrada acá: es el único de los 3 que entrena algo (el
+scoring de conversión, ver app/cases/lead_match/). `dynamic_pricing` no necesita
+dataset: los eventos de compra se mandan inline en cada request (ver el docstring de
+app/cases/dynamic_pricing/schemas.py). `smart_route` tampoco: es una optimización
+combinatoria stateless resuelta por request (ver app/cases/smart_route/), no entrena
+ni versiona ningún modelo."""
 
 import datetime as dt
 import enum
@@ -11,10 +20,7 @@ from database import Base
 
 
 class CaseType(str, enum.Enum):
-    case1_messaging = "case1_messaging"
-    case2_pricing = "case2_pricing"
-    case3_anomaly = "case3_anomaly"
-    case4_accelerator = "case4_accelerator"
+    lead_match = "lead_match"
 
 
 class DatasetStatus(str, enum.Enum):

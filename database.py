@@ -35,6 +35,6 @@ def init_db() -> None:
     una forma vieja, create_all no la altera. Para modificar el esquema sobre una base
     con datos reales, usar Alembic (ver carpeta alembic/ y el apartado "Migraciones"
     del README) en vez de tocar los modelos y confiar en que esto los actualice solo."""
-    from app.models import alert_ticket, company, dataset  # noqa: F401  (registran los modelos en Base)
+    from app.models import company, dataset  # noqa: F401  (registran los modelos en Base)
 
     Base.metadata.create_all(bind=engine)

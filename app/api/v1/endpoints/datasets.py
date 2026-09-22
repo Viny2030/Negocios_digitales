@@ -1,9 +1,10 @@
 """
-Carga de datasets por empresa. Cada empresa sube un CSV con SUS datos históricos
-(por ejemplo: campañas de marketing para case1, transacciones/precios para case2,
-alertas resueltas para case3). El archivo se guarda en disco y se registra en la DB;
-luego los scripts de entrenamiento (scripts/train_case*.py) o el endpoint /train
-de cada caso lo toman como fuente para (re)entrenar el modelo de ESA empresa.
+Carga de datasets por empresa. Cada empresa sube un CSV con sus datos históricos
+(hoy, el único caso que entrena algo es lead_match: leads históricos con su
+resultado de conversión -- ver app/models/dataset.py sobre por qué dynamic_pricing
+y smart_route no usan este endpoint). El archivo se guarda en disco y se registra
+en la DB; luego el endpoint /train del caso correspondiente lo toma como fuente
+para (re)entrenar el modelo de ESA empresa.
 
 Este router solo se ocupa de las partes HTTP (auth, 404s, códigos de estado). El
 guardado en disco, el hash de contenido, el conteo de filas y la regla de "dataset

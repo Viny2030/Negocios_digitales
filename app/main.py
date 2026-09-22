@@ -29,10 +29,11 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.PROJECT_NAME,
     description=(
-        "Plataforma de algoritmos prescriptivos (RL + Optimización) para negocios digitales. "
-        "Expone 4 casos: secuenciación de mensajes (1.1), pricing dinámico con equidad (2.1), "
-        "triaje de anomalías (3.3) y asignación de recursos en aceleradora (6.2). Multi-empresa: "
-        "cada empresa carga sus propios datasets y entrena/consulta su propio modelo."
+        "Suite de APIs B2B de optimización y ML para negocios digitales: DynamicPricing "
+        "(fijación dinámica de precios con restricciones de margen/variación), SmartRoute "
+        "Fleet (ruteo y despacho last-mile) y LeadMatch Engine (scoring y asignación de "
+        "leads a vendedores). Multi-empresa: cada empresa cliente tiene su propio API key, "
+        "aislado del resto."
     ),
     version="0.1.0",
     lifespan=lifespan,

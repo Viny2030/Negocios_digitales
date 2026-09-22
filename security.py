@@ -1,7 +1,7 @@
 """
 Autenticación por API Key para empresas clientes de la plataforma.
 Cada empresa recibe una api_key al registrarse (ver endpoints/companies.py).
-Todos los endpoints de negocio (/case1, /case2, /case3, /datasets) requieren
+Todos los endpoints de negocio (/dynamic-pricing, /smart-route, /lead-match, /datasets) requieren
 el header X-API-Key y resuelven la empresa (tenant) a partir de él.
 """
 

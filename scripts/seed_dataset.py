@@ -10,10 +10,11 @@ de columnas y la regla de "dataset activo" son una sola implementación, no dos
 copiadas entre el router y este script.
 
 Uso manual:
-    python -m scripts.seed_dataset --company-id 1 --case case2_pricing \
-        --file synthetic_data/case2_pricing.csv
+    python -m scripts.seed_dataset --company-id 1 --case lead_match \
+        --file synthetic_data/lead_match.csv
 
-    # Los 4 datasets sintéticos para la empresa 1 de una sola vez:
+    # Todos los datasets sintéticos disponibles para la empresa 1 de una sola vez
+    # (hoy, solo lead_match -- ver CaseType en app/models/dataset.py):
     python -m scripts.seed_dataset --company-id 1 --all-synthetic
 """
 
@@ -59,8 +60,8 @@ def seed_dataset(company_id: int, case: str, file_path: str, activate: bool = Tr
 
 
 def seed_all_synthetic(company_id: int, synthetic_dir: str = SYNTHETIC_DIR) -> list[dict]:
-    """Carga los 4 CSVs de synthetic_data/ (uno por caso) para `company_id`, para
-    dejar la empresa lista para entrenar sin pasos manuales."""
+    """Carga los CSVs de synthetic_data/ (uno por caso con dataset -- ver CaseType)
+    para `company_id`, para dejar la empresa lista para entrenar sin pasos manuales."""
     results = []
     for case in CaseType:
         file_path = os.path.join(synthetic_dir, f"{case.value}.csv")
