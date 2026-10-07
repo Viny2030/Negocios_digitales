@@ -89,6 +89,10 @@ hoy solo al caso `lead_match` (ver `CaseType` en `app/models/dataset.py`):
 entre varios subidos: **no** cambia qué usa `/train`, que sigue pidiendo `dataset_id`
 explícito.
 
+Se aceptan archivos `.csv`, `.tsv` o `.txt` (sin importar mayúsculas), separados por
+`,`, `;` o tabulación (se detecta solo, así que un CSV exportado por Excel en español
+funciona tal cual), en UTF-8 (con o sin BOM) o latin-1/cp1252.
+
 Tanto `POST` como `PUT` validan que el CSV traiga al menos 2 de las columnas
 esperadas (`EXPECTED_COLUMNS` en `dataset_ingestion.py`: `lead_id`, `origin`,
 `time_on_site_minutes`, `company_size`, `rep_id`, `converted`) antes de guardar nada
@@ -141,7 +145,7 @@ scripts/
 tests/
   test_dynamic_pricing.py test_smart_route.py test_lead_match.py test_datasets.py
 alembic/         # migraciones (incluye la que retira el esquema de los 4 casos viejos)
-dashboard.html    # panel de pruebas técnico (no es UI para clientes, ver abajo)
+dashboard.html   # panel de pruebas técnico (no es UI para clientes, ver abajo)
 requirements.txt
 Dockerfile / docker-compose.yml
 .env.example
@@ -152,12 +156,27 @@ Dockerfile / docker-compose.yml
 
 ## Cómo correrlo
 
+Linux/Mac (bash):
+
 ```bash
 python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements.txt -r requirements-dev.txt
 cp .env.example .env
 uvicorn app.main:app --reload
 # Docs interactivas: http://localhost:8000/docs
+```
+
+Windows (PowerShell):
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1      # si falla por ExecutionPolicy: Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+pip install -r requirements.txt -r requirements-dev.txt
+Copy-Item .env.example .env
+uvicorn app.main:app --reload
+# Tests y lint
+python -m pytest tests -q
+ruff check .
 ```
 
 O con Docker (incluye Postgres):
@@ -187,6 +206,12 @@ alembic upgrade head
 alembic downgrade -1
 ```
 
+> **Base creada por `uvicorn` antes de usar Alembic:** si `prescriptive.db` (o el
+> Postgres) ya tiene las tablas porque las creó `init_db()`, `alembic upgrade head`
+> falla con "table already exists" -- esa base no tiene la tabla `alembic_version`.
+> Marcala una sola vez como al día con `alembic stamp head` y desde ahí usá
+> `upgrade` normalmente.
+
 `alembic/env.py` ya está cableado a `settings.DATABASE_URL` (mismo `.env` que usa la
 API), así que no hace falta tocar `alembic.ini` para apuntar a otra base.
 
@@ -210,14 +235,14 @@ curl -X POST localhost:8000/api/v1/companies -H "Content-Type: application/json"
 curl -X POST localhost:8000/api/v1/dynamic-pricing/price -H "X-API-Key: <API_KEY>" \
   -H "Content-Type: application/json" -d '{
     "skus": [{
-      "sku": "sku-1", "base_cost": 100, "current_price": 150,
+      "sku_id": "sku-1", "base_cost": 100, "current_price": 150, "stock": 50,
       "min_margin_pct": 0.15, "max_daily_variation_pct": 0.10,
       "purchase_events": [
-        {"price": 140, "units_sold": 30}, {"price": 150, "units_sold": 22},
-        {"price": 160, "units_sold": 15}, {"price": 170, "units_sold": 9}
+        {"price": 140, "quantity_sold": 30}, {"price": 150, "quantity_sold": 22},
+        {"price": 160, "quantity_sold": 15}, {"price": 170, "quantity_sold": 9}
       ]
     }],
-    "objective": "maximize_margin"
+    "objective": "margin"
   }'
 ```
 
@@ -257,6 +282,31 @@ curl -X POST localhost:8000/api/v1/lead-match/match -H "X-API-Key: <API_KEY>" \
     "leads": [{"lead_id": "l1", "origin": "paid_ads", "time_on_site_minutes": 22, "company_size": 300}],
     "reps": [{"rep_id": "r1", "capacity": 2}, {"rep_id": "r2", "capacity": 3, "specialties": ["paid_ads"]}]
   }'
+```
+
+### Lo mismo desde PowerShell
+
+En Windows PowerShell 5, `curl` es un alias de `Invoke-WebRequest` y no acepta los
+flags de arriba. Usá `Invoke-RestMethod` (o `curl.exe` explícito):
+
+```powershell
+$B = "http://localhost:8000/api/v1"
+$co = Invoke-RestMethod -Method Post "$B/companies" -ContentType "application/json" `
+  -Body '{"name": "Empresa Demo", "contact_email": "demo@empresa.com"}'
+$H = @{ "X-API-Key" = $co.api_key }
+
+# DynamicPricing
+$body = @{
+  skus = @(@{ sku_id = "sku-1"; base_cost = 100; current_price = 150; stock = 50
+    purchase_events = @(@{price=140;quantity_sold=30}, @{price=150;quantity_sold=22},
+                        @{price=160;quantity_sold=15}, @{price=170;quantity_sold=9}) })
+  objective = "margin"
+} | ConvertTo-Json -Depth 5
+Invoke-RestMethod -Method Post "$B/dynamic-pricing/price" -Headers $H -ContentType "application/json" -Body $body
+
+# LeadMatch: subir dataset (curl.exe, porque Invoke-RestMethod -Form requiere PowerShell 7)
+curl.exe -X POST "$B/datasets/lead_match" -H "X-API-Key: $($co.api_key)" -F "file=@synthetic_data/lead_match.csv"
+Invoke-RestMethod -Method Post "$B/lead-match/train" -Headers $H -ContentType "application/json" -Body '{"dataset_id": 1}'
 ```
 
 ## Panel de pruebas (`dashboard.html`)

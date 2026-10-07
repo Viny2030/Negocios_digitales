@@ -2,9 +2,8 @@
 Scoring predictivo de conversión: regresión logística sobre las features del
 lead (origen, tiempo en sitio, tamaño de empresa), entrenada por empresa con
 sus propios leads históricos (ver train.py). Si todavía no hay modelo
-entrenado para la empresa, cae a una heurística de respaldo -- mismo patrón
-que el resto de la plataforma (ver policy._heuristic de los casos anteriores),
-acá aplicado a un clasificador simple en vez de una política RL.
+entrenado para la empresa, cae a una heurística de respaldo para que /match
+funcione desde el día 1 (mismo patrón que DEFAULT_ELASTICITY en DynamicPricing).
 """
 
 import math

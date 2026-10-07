@@ -34,9 +34,8 @@ def train_endpoint(
     company: Company = Depends(get_current_company),
 ):
     """Entrena (o reentrena) el clasificador de conversión de la empresa con un
-    dataset ya subido (ver POST /datasets/lead_match). Corre sincrónico: a
-    diferencia de los modelos RL de la plataforma anterior, una regresión
-    logística sobre unos miles de leads tarda segundos, no minutos."""
+    dataset ya subido (ver POST /datasets/lead_match). Corre sincrónico: una
+    regresión logística sobre unos miles de leads tarda segundos."""
     dataset = (
         db.query(Dataset)
         .filter(

@@ -12,8 +12,8 @@ su propio router, vía el decorador @limiter.limit(...).
 
 Nota: el backend de conteo por defecto de slowapi es en memoria (por proceso). Con un
 solo proceso de uvicorn alcanza; si en algún momento se corre con varios workers detrás
-de un balanceador, hay que apuntar `storage_uri` a Redis (que este proyecto ya usa para
-Celery, ver settings.REDIS_URL) para que el conteo sea compartido entre procesos.
+de un balanceador, hay que apuntar `storage_uri` a un backend compartido (ej. Redis,
+`storage_uri="redis://..."`) para que el conteo sea común a todos los procesos.
 """
 
 from slowapi import Limiter

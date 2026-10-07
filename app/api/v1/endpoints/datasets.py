@@ -14,19 +14,32 @@ scripts/seed_dataset.py (carga directa sin pasar por HTTP, para desarrollo/tests
 
 import os
 
-import pandas as pd
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from sqlalchemy.orm import Session
 
 from app.models.company import Company
 from app.models.dataset import CaseType, Dataset
 from app.schemas.common import DatasetOut
-from app.services.dataset_ingestion import DatasetSchemaError, activate_dataset, ingest_dataset, replace_dataset
+from app.services.dataset_ingestion import (
+    DatasetSchemaError,
+    activate_dataset,
+    ingest_dataset,
+    read_dataset_csv,
+    replace_dataset,
+)
 from database import get_db
 from rate_limit import limiter
 from security import get_current_company
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
+
+ALLOWED_EXTENSIONS = (".csv", ".tsv", ".txt")
+
+
+def _check_extension(file: UploadFile) -> None:
+    # Case-insensitive: Windows/Excel a veces guarda "DATOS.CSV" en mayúsculas.
+    if not (file.filename or "").lower().endswith(ALLOWED_EXTENSIONS):
+        raise HTTPException(status_code=400, detail="Solo se aceptan archivos .csv, .tsv o .txt")
 
 
 def _get_owned_dataset(db: Session, company: Company, case: CaseType, dataset_id: int) -> Dataset:
@@ -56,8 +69,7 @@ def upload_dataset(
     En cualquier otro caso se crea un dataset nuevo y queda como el "activo" para
     (empresa, caso) -- ver el campo `is_active` en la respuesta, y el endpoint
     `/activate` para volver a marcar como vigente un dataset anterior."""
-    if not file.filename.endswith((".csv", ".tsv")):
-        raise HTTPException(status_code=400, detail="Solo se aceptan archivos .csv o .tsv")
+    _check_extension(file)
 
     try:
         dataset, _created = ingest_dataset(db, company.id, case, file.filename, file.file, activate=True)
@@ -83,9 +95,8 @@ def replace_dataset_endpoint(
     diferencia de POST, que siempre crea uno nuevo o reactiva uno con el mismo
     contenido). Pensado para corregir un upload con datos malos sin dejar
     "huérfano" el dataset_id si ya hay un modelo entrenado que lo referencia en su
-    metadata (ver scripts/train_case*.py)."""
-    if not file.filename.endswith((".csv", ".tsv")):
-        raise HTTPException(status_code=400, detail="Solo se aceptan archivos .csv o .tsv")
+    metadata (ver model_registry.save_version)."""
+    _check_extension(file)
 
     dataset = _get_owned_dataset(db, company, case, dataset_id)
     try:
@@ -156,5 +167,5 @@ def preview_dataset(
     """Devuelve las primeras filas del dataset, útil para validar el mapeo de columnas en el frontend."""
     dataset = _get_owned_dataset(db, company, case, dataset_id)
 
-    df = pd.read_csv(dataset.file_path, nrows=20)
+    df = read_dataset_csv(dataset.file_path, nrows=20)
     return {"columns": list(df.columns), "rows": df.fillna("").to_dict(orient="records")}

@@ -32,7 +32,7 @@ def _make_version(models_dir, company_id, case, tag):
 
 def test_save_version_no_promueve_automaticamente(tmp_path):
     models_dir = str(tmp_path)
-    company_id, case = 1, "case2_pricing"
+    company_id, case = 1, "lead_match"
 
     version_id = _make_version(models_dir, company_id, case, "v1")
 
@@ -49,7 +49,7 @@ def test_save_version_no_promueve_automaticamente(tmp_path):
 
 def test_promote_expone_la_version_como_current(tmp_path):
     models_dir = str(tmp_path)
-    company_id, case = 2, "case1_messaging"
+    company_id, case = 2, "lead_match"
 
     version_id = _make_version(models_dir, company_id, case, "v1")
     model_registry.promote(models_dir, company_id, case, version_id)
@@ -62,20 +62,20 @@ def test_promote_expone_la_version_como_current(tmp_path):
 
 def test_promote_version_inexistente_falla(tmp_path):
     with pytest.raises(ValueError):
-        model_registry.promote(str(tmp_path), 3, "case2_pricing", "version-que-no-existe")
+        model_registry.promote(str(tmp_path), 3, "lead_match", "version-que-no-existe")
 
 
 def test_version_no_promovida_no_reemplaza_a_la_actual(tmp_path):
-    """Simula el gate de equidad de case2: una v2 que no pasa el filtro se guarda para
-    historial, pero la empresa sigue sirviendo v1 hasta que alguien promueva otra cosa."""
+    """Una v2 que no se promueve (ej. peor AUC) se guarda para historial, pero la
+    empresa sigue sirviendo v1 hasta que alguien promueva otra cosa."""
     models_dir = str(tmp_path)
-    company_id, case = 4, "case2_pricing"
+    company_id, case = 4, "lead_match"
 
     v1 = _make_version(models_dir, company_id, case, "v1_aprobada")
     model_registry.promote(models_dir, company_id, case, v1)
 
-    v2 = _make_version(models_dir, company_id, case, "v2_rechazada_por_fairness")
-    # v2 nunca se promueve (equivalente a approved=False en scripts/train_case2.py)
+    v2 = _make_version(models_dir, company_id, case, "v2_no_promovida")
+    # v2 nunca se promueve
 
     assert model_registry.get_current_version_id(models_dir, company_id, case) == v1
 
@@ -87,7 +87,7 @@ def test_rollback_manual_a_una_version_anterior(tmp_path):
     """Si una versión promovida resulta problemática, promover una versión anterior
     (rollback manual) debe volver a dejarla como la servida."""
     models_dir = str(tmp_path)
-    company_id, case = 5, "case3_anomaly"
+    company_id, case = 5, "lead_match"
 
     v1 = _make_version(models_dir, company_id, case, "v1")
     model_registry.promote(models_dir, company_id, case, v1)
@@ -105,22 +105,25 @@ def test_companies_y_casos_distintos_estan_aislados(tmp_path):
     """Una versión de la empresa 1 no debe filtrarse a la empresa 2, ni un caso a otro."""
     models_dir = str(tmp_path)
 
-    v_company1 = _make_version(models_dir, 1, "case1_messaging", "empresa1")
-    model_registry.promote(models_dir, 1, "case1_messaging", v_company1)
+    v_company1 = _make_version(models_dir, 1, "lead_match", "empresa1")
+    model_registry.promote(models_dir, 1, "lead_match", v_company1)
 
-    assert model_registry.get_current_version_id(models_dir, 2, "case1_messaging") is None
-    assert model_registry.get_current_version_id(models_dir, 1, "case2_pricing") is None
-    assert model_registry.get_current_version_id(models_dir, 1, "case1_messaging") == v_company1
+    assert model_registry.get_current_version_id(models_dir, 2, "lead_match") is None
+    assert model_registry.get_current_version_id(models_dir, 1, "otro_caso") is None
+    assert model_registry.get_current_version_id(models_dir, 1, "lead_match") == v_company1
 
 
 def test_get_current_artifact_path_filename_inexistente_devuelve_none(tmp_path):
-    """Si la versión promovida no incluye el artefacto pedido (ej. fp_classifier.joblib
-    en un caso que no lo generó), no debe explotar -- solo devolver None."""
+    """Si la versión promovida no incluye el artefacto pedido, no debe explotar --
+    solo devolver None."""
     models_dir = str(tmp_path)
-    company_id, case = 6, "case3_anomaly"
+    company_id, case = 6, "lead_match"
 
     v1 = _make_version(models_dir, company_id, case, "sin_clasificador")
     model_registry.promote(models_dir, company_id, case, v1)
 
     assert model_registry.get_current_artifact_path(models_dir, company_id, case, "model.zip") is not None
-    assert model_registry.get_current_artifact_path(models_dir, company_id, case, "fp_classifier.joblib") is None
+    assert (
+        model_registry.get_current_artifact_path(models_dir, company_id, case, "artefacto_inexistente.joblib")
+        is None
+    )

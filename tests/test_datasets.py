@@ -155,15 +155,15 @@ def test_replace_dataset_de_otra_empresa_da_404(client, company_api_key):
 
 
 def test_upload_rechaza_csv_de_otro_caso(client, company_api_key):
-    """El CSV de case2_pricing (product_id, base_cost, ...) no trae ninguna columna
-    esperada para lead_match -- antes se aceptaba igual como 'validated'."""
-    case2_csv = (
+    """Un CSV de otro dominio (product_id, base_cost, ...) no trae ninguna columna
+    esperada para lead_match -- se rechaza con 400."""
+    otro_csv = (
         b"product_id,base_cost,user_segment,inventory_level_pct,competitor_avg_price,demand_index\n"
         b"sku-1,100.0,premium,50.0,150.0,0.5\n"
     )
     resp = client.post(
         "/api/v1/datasets/lead_match",
-        files={"file": ("por_error.csv", io.BytesIO(case2_csv), "text/csv")},
+        files={"file": ("por_error.csv", io.BytesIO(otro_csv), "text/csv")},
         headers={"X-API-Key": company_api_key},
     )
     assert resp.status_code == 400
@@ -181,10 +181,10 @@ def test_replace_dataset_rechaza_csv_de_otro_caso(client, company_api_key):
         headers=headers,
     ).json()
 
-    case2_csv = b"product_id,base_cost,user_segment\nsku-1,100.0,premium\n"
+    otro_csv = b"product_id,base_cost,user_segment\nsku-1,100.0,premium\n"
     resp = client.put(
         f"/api/v1/datasets/lead_match/{original['id']}",
-        files={"file": ("por_error.csv", io.BytesIO(case2_csv), "text/csv")},
+        files={"file": ("por_error.csv", io.BytesIO(otro_csv), "text/csv")},
         headers=headers,
     )
     assert resp.status_code == 400
@@ -207,3 +207,46 @@ def test_delete_dataset_lo_saca_de_la_lista(client, company_api_key):
 
     listed = client.get("/api/v1/datasets/lead_match", headers=headers).json()
     assert listed == []
+
+
+def test_upload_acepta_csv_de_excel_en_espanol(client, company_api_key):
+    """Excel con configuración regional en español exporta con ";" como separador,
+    BOM de UTF-8 y a veces la extensión en mayúsculas -- debe aceptarse igual y el
+    preview tiene que ver las columnas separadas, no una sola columna gigante."""
+    headers = {"X-API-Key": company_api_key}
+    content = _csv_bytes(4).replace(b",", b";")
+    content = "\ufeff".encode() + content
+    resp = client.post(
+        "/api/v1/datasets/lead_match",
+        files={"file": ("EXPORT_CRM.CSV", io.BytesIO(content), "text/csv")},
+        headers=headers,
+    )
+    assert resp.status_code == 201, resp.text
+    dataset = resp.json()
+    assert dataset["row_count"] == 4
+
+    preview = client.get(f"/api/v1/datasets/lead_match/{dataset['id']}/preview", headers=headers).json()
+    assert preview["columns"] == [
+        "lead_id",
+        "origin",
+        "time_on_site_minutes",
+        "company_size",
+        "rep_id",
+        "converted",
+    ]
+    assert len(preview["rows"]) == 4
+
+
+def test_upload_acepta_csv_en_latin1(client, company_api_key):
+    headers = {"X-API-Key": company_api_key}
+    content = (
+        "lead_id;origin;time_on_site_minutes;company_size;rep_id;converted\n" "p-1;campaña;5;100;rep-1;1\n"
+    ).encode("latin-1")
+    resp = client.post(
+        "/api/v1/datasets/lead_match",
+        files={"file": ("latin1.csv", io.BytesIO(content), "text/csv")},
+        headers=headers,
+    )
+    assert resp.status_code == 201, resp.text
+    preview = client.get(f"/api/v1/datasets/lead_match/{resp.json()['id']}/preview", headers=headers).json()
+    assert preview["rows"][0]["origin"] == "campaña"

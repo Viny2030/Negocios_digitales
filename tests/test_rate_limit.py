@@ -4,8 +4,8 @@ aplica por empresa (clave = header X-API-Key) y no globalmente ni por IP, y que 
 el límite devuelve 429.
 
 Se prueba contra una mini app FastAPI standalone en vez del app real (app.main) porque
-los endpoints reales que tienen un @limiter.limit explícito son los de /train, que
-necesitan Celery + Redis corriendo -- acá se valida el mecanismo en sí, aislado.
+los endpoints reales con @limiter.limit explícito (/train, carga de datasets) necesitan
+DB y datos de prueba -- acá se valida el mecanismo en sí, aislado.
 """
 
 import pytest

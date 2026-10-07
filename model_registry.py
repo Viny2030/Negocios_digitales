@@ -1,21 +1,15 @@
 """
-Registro de versiones de modelos entrenados, por empresa y por caso.
-
-Antes de esto, cada `scripts/train_caseN.py` sobreescribía directamente el artefacto
-que sirve `app/cases/caseN_*/service.py`, sin historial ni forma de bloquear un modelo
-problemático. Esto tenía además un bug real: `train_case1.py`, `train_case2.py` y
-`train_case4.py` guardaban con el nombre `model_{algoritmo}.zip`, mientras que los
-servicios cargaban siempre `model.zip` — ningún modelo recién entrenado en esos tres
-casos llegaba a servirse.
+Registro de versiones de modelos entrenados, por empresa y por caso. Hoy lo usa solo
+LeadMatch (ver app/cases/lead_match/train.py y service.py), pero es genérico.
 
 Estructura en disco (bajo settings.MODELS_DIR):
-    {company_id}/{case}/versions/{version_id}/model.zip        (+ otros artefactos)
+    {company_id}/{case}/versions/{version_id}/model.joblib     (+ otros artefactos)
     {company_id}/{case}/versions/{version_id}/metadata.json
     {company_id}/{case}/current.json   -> puntero a la versión activa (servida)
 
-Cada versión queda guardada siempre, incluso si no se promueve (por ejemplo, si no pasa
-el filtro de equidad de case2): así queda constancia de qué se entrenó y por qué se
-rechazó, y la versión anterior sigue sirviendo hasta que una nueva la reemplace.
+Cada versión queda guardada siempre, aunque no se promueva: así queda constancia de
+qué se entrenó, y la versión anterior sigue sirviendo hasta que una nueva la
+reemplace. Promover una versión anterior es un rollback.
 """
 
 import datetime as dt
@@ -37,7 +31,7 @@ def _current_pointer_path(models_dir: str, company_id: int, case: str) -> str:
 
 
 def new_version_id(algorithm: str = "model") -> str:
-    """Identificador único y ordenable cronológicamente: 20260727T143000123456Z_ppo."""
+    """Identificador único y ordenable cronológicamente: 20260727T143000123456Z_logreg."""
     ts = dt.datetime.now(dt.UTC).strftime("%Y%m%dT%H%M%S%fZ")
     return f"{ts}_{algorithm.lower()}"
 
@@ -94,8 +88,8 @@ def promote(models_dir: str, company_id: int, case: str, version_id: str) -> Non
 def get_current_version_id(models_dir: str, company_id: int, case: str) -> str | None:
     """Lectura barata (sin construir rutas ni chequear artefactos) usada por los servicios
     para detectar si hay una versión más nueva promovida, incluso cuando el entrenamiento
-    corrió en otro proceso (p.ej. un worker de Celery, ver app/tasks.py) y por lo tanto
-    `invalidate_policy_cache` nunca se ejecutó en el proceso que sirve la API."""
+    corrió en otro proceso (p.ej. otro worker de uvicorn) y por lo tanto la invalidación
+    de caché en memoria nunca se ejecutó en el proceso que atiende el request."""
     pointer_path = _current_pointer_path(models_dir, company_id, case)
     if not os.path.exists(pointer_path):
         return None
@@ -114,9 +108,9 @@ def get_current_version_dir(models_dir: str, company_id: int, case: str) -> str 
 
 
 def get_current_artifact_path(models_dir: str, company_id: int, case: str, filename: str) -> str | None:
-    """Ruta al artefacto (p.ej. 'model.zip') de la versión actualmente promovida, o None
-    si todavía no hay ninguna versión aprobada/servible (los `PolicyWrapper` de cada caso
-    ya saben caer a su heurística cuando reciben model_path=None)."""
+    """Ruta al artefacto (p.ej. 'model.joblib') de la versión actualmente promovida, o None
+    si todavía no hay ninguna versión servible (ver load_scorer en
+    app/cases/lead_match/scoring.py, que cae a la heurística con model_path=None)."""
     vdir = get_current_version_dir(models_dir, company_id, case)
     if vdir is None:
         return None
@@ -126,11 +120,8 @@ def get_current_artifact_path(models_dir: str, company_id: int, case: str, filen
 
 def get_current_metrics(models_dir: str, company_id: int, case: str) -> dict | None:
     """Devuelve el dict `metrics` de metadata.json de la versión actualmente promovida
-    (p.ej. {"algorithm": "ppo", "timesteps": ..., ...}), o None si no hay versión
-    promovida o falta el archivo. Los `PolicyWrapper` de cada caso lo usan para saber
-    con qué algoritmo se entrenó realmente el modelo, en vez de adivinarlo por el
-    nombre del artefacto -- todos los `train_caseN.py` guardan siempre `model.zip`
-    (ver save_version), así que el nombre nunca contiene el algoritmo."""
+    (p.ej. {"n_train": ..., "auc": ...}), o None si no hay versión promovida o falta
+    el archivo."""
     vdir = get_current_version_dir(models_dir, company_id, case)
     if vdir is None:
         return None

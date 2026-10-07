@@ -5,6 +5,7 @@ Lee variables de entorno (ver .env.example) usando pydantic-settings.
 
 from functools import lru_cache
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -23,21 +24,26 @@ class Settings(BaseSettings):
     # módulo del proyecto y solo generaba una falsa sensación de configuración pendiente.
     API_KEY_HEADER: str = "X-API-Key"
 
+    @field_validator("DATABASE_URL")
+    @classmethod
+    def _normalizar_esquema_postgres(cls, v: str) -> str:
+        # Algunos proveedores (Heroku, a veces Railway) entregan "postgres://...", que
+        # SQLAlchemy 2.x ya no acepta como alias de "postgresql://".
+        if v.startswith("postgres://"):
+            return "postgresql://" + v[len("postgres://") :]
+        return v
+
     # Carpeta donde se guardan los datasets subidos por cada empresa
     DATASETS_DIR: str = "./storage/datasets"
 
-    # Carpeta donde se guardan los modelos RL entrenados (uno por empresa/caso)
+    # Carpeta donde se guardan los modelos entrenados y versionados (hoy solo LeadMatch, uno por empresa)
     MODELS_DIR: str = "./storage/models"
 
     CORS_ORIGINS: list[str] = ["*"]
 
-    # AGREGADO 2026-09-22: se sacó REDIS_URL (Celery ya no se usa -- ver celery_app.py
-    # en el historial de git) y los settings específicos de los 4 casos viejos
-    # (FAIRNESS_DP_THRESHOLD de case2, TICKETING_WEBHOOK_URL/TIMEOUT_S de case3).
-    # Ninguno de los 3 productos actuales necesita una cola de entrenamiento: el
-    # scoring de LeadMatch entrena sincrónico en el propio request de /train (ver
-    # app/cases/lead_match/train.py), y DynamicPricing/SmartRoute son stateless
-    # por request, sin entrenamiento en absoluto.
+    # No hay cola de tareas ni broker: el scoring de LeadMatch entrena sincrónico en
+    # el propio request de /train (ver app/cases/lead_match/train.py), y
+    # DynamicPricing/SmartRoute son stateless por request, sin entrenamiento.
 
 
 @lru_cache

@@ -185,3 +185,21 @@ def test_endpoint_train_end_to_end(client, company_api_key):
     )
     assert match_resp.status_code == 200
     assert match_resp.json()["used_default_scoring"] is False
+
+
+def test_train_acepta_dataset_con_punto_y_coma(tmp_path, monkeypatch):
+    """El entrenamiento lee el CSV con el mismo detector de separador que el upload."""
+    import model_registry as mr
+    from app.cases.lead_match import train as train_mod
+
+    monkeypatch.setattr(train_mod.settings, "MODELS_DIR", str(tmp_path / "models"))
+    import pathlib
+
+    synthetic = pathlib.Path(__file__).resolve().parents[1] / "synthetic_data" / "lead_match.csv"
+    src = synthetic.read_text(encoding="utf-8")
+    path = tmp_path / "leads_excel.csv"
+    path.write_text(src.replace(",", ";"), encoding="utf-8-sig")
+
+    version_id, metrics = train_mod.train_for_company(99, str(path))
+    assert metrics["n_train"] > 0
+    assert mr.get_current_version_id(str(tmp_path / "models"), 99, "lead_match") == version_id

@@ -42,17 +42,19 @@ def upgrade() -> None:
     # 4 casos viejos -- es intencional (son productos que ya no existen en la
     # plataforma), pero significa que esta migración es destructiva para datos
     # de esos casos si llegara a haber algo real cargado en producción.
+    # `case` es palabra reservada en Postgres: va siempre entre comillas dobles. El
+    # valor del IN se pasa en el propio bindparam (el 2do argumento de op.execute son
+    # execution_options, no parámetros del SQL).
     op.execute(
-        sa.text("DELETE FROM datasets WHERE case IN :old_values").bindparams(
-            sa.bindparam("old_values", expanding=True)
-        ),
-        {"old_values": list(OLD_VALUES)},
+        sa.text('DELETE FROM datasets WHERE "case" IN :old_values').bindparams(
+            sa.bindparam("old_values", value=list(OLD_VALUES), expanding=True)
+        )
     )
 
     op.execute("ALTER TYPE casetype RENAME TO casetype_old")
     new_enum = sa.Enum(*NEW_VALUES, name="casetype")
     new_enum.create(bind)
-    op.execute("ALTER TABLE datasets ALTER COLUMN case TYPE casetype USING case::text::casetype")
+    op.execute('ALTER TABLE datasets ALTER COLUMN "case" TYPE casetype USING "case"::text::casetype')
     op.execute("DROP TYPE casetype_old")
 
 
@@ -62,7 +64,7 @@ def downgrade() -> None:
         op.execute("ALTER TYPE casetype RENAME TO casetype_new")
         old_enum = sa.Enum(*OLD_VALUES, name="casetype")
         old_enum.create(bind)
-        op.execute("ALTER TABLE datasets ALTER COLUMN case TYPE casetype USING case::text::casetype")
+        op.execute('ALTER TABLE datasets ALTER COLUMN "case" TYPE casetype USING "case"::text::casetype')
         op.execute("DROP TYPE casetype_new")
 
     op.create_table(

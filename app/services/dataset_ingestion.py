@@ -34,11 +34,9 @@ from config import get_settings
 
 settings = get_settings()
 
-# Columnas "identificatorias" de cada caso: no hace falta que estén TODAS (el resto del
-# pipeline ya es tolerante -- ver record_to_* en cada encoding.py, que usan defaults para
-# lo que falte), pero si el CSV subido no trae NINGUNA de las de su propio caso, es casi
-# seguro que se subió el dataset equivocado (p.ej. el de case1 al endpoint de case2) y
-# antes quedaba igual aceptado como "validated". Ver MIN_MATCHING_COLUMNS.
+# Columnas "identificatorias" de cada caso: no hace falta que estén TODAS para aceptar el
+# upload (train.py valida después las que necesita de verdad), pero si el CSV no trae al
+# menos MIN_MATCHING_COLUMNS de ellas es casi seguro que se subió el archivo equivocado.
 EXPECTED_COLUMNS: dict[CaseType, set[str]] = {
     CaseType.lead_match: {
         "lead_id",
@@ -51,10 +49,31 @@ EXPECTED_COLUMNS: dict[CaseType, set[str]] = {
 }
 MIN_MATCHING_COLUMNS = 2
 
+# Separadores aceptados. Excel con configuración regional en español exporta CSV con ";"
+# (porque la coma es el separador decimal), así que no alcanza con asumir ",".
+SUPPORTED_DELIMITERS = (",", ";", "\t")
+# Excel en Windows suele exportar en cp1252/latin-1 en vez de UTF-8; latin-1 nunca falla
+# al decodificar, así que sirve de respaldo si el archivo no es UTF-8 válido.
+_FALLBACK_ENCODING = "latin-1"
+
 
 class DatasetSchemaError(ValueError):
     """El CSV se pudo leer, pero sus columnas no coinciden con las esperadas para el
     caso indicado (probablemente se subió el dataset de otro caso)."""
+
+
+def detect_delimiter(header_line: str) -> str:
+    """Elige, entre SUPPORTED_DELIMITERS, el que más aparece en la línea de header.
+    Si no aparece ninguno (CSV de una sola columna), devuelve ","."""
+    counts = {d: header_line.count(d) for d in SUPPORTED_DELIMITERS}
+    best = max(counts, key=counts.get)
+    return best if counts[best] > 0 else ","
+
+
+def _parse_header(line: str) -> list[str]:
+    line = line.lstrip("\ufeff")  # BOM de UTF-8 (lo agrega Excel al "Guardar como CSV UTF-8")
+    columns = next(csv.reader([line], delimiter=detect_delimiter(line)), [])
+    return [c.strip() for c in columns]
 
 
 def _peek_header_columns(file_obj) -> list[str]:
@@ -65,7 +84,24 @@ def _peek_header_columns(file_obj) -> list[str]:
     file_obj.seek(pos)
     if isinstance(line, bytes):
         line = line.decode("utf-8", errors="replace")
-    return next(csv.reader([line]), [])
+    return _parse_header(line)
+
+
+def read_dataset_csv(path: str, nrows: int | None = None) -> pd.DataFrame:
+    """Lee un dataset guardado detectando separador (",", ";" o tab) y encoding (UTF-8
+    con o sin BOM, o latin-1 como respaldo). Es el único lugar donde se hace
+    `pd.read_csv` de un dataset subido -- lo usan el preview, la inferencia de columnas
+    y el entrenamiento -- para que todos interpreten el archivo igual."""
+    for encoding in ("utf-8-sig", _FALLBACK_ENCODING):
+        try:
+            with open(path, encoding=encoding) as f:
+                header = f.readline()
+            df = pd.read_csv(path, sep=detect_delimiter(header), nrows=nrows, encoding=encoding)
+        except UnicodeDecodeError:
+            continue
+        df.columns = [str(c).strip() for c in df.columns]
+        return df
+    raise ValueError(f"No se pudo decodificar {path}")  # inalcanzable: latin-1 acepta cualquier byte
 
 
 def _validate_expected_columns(case: CaseType, columns: list[str]) -> None:
@@ -117,7 +153,7 @@ def infer_columns_schema(path: str, nrows: int = 5000) -> dict[str, str]:
     """Lee solo una muestra para inferir tipos de columna -- alcanza para
     `columns_schema` y es lo único para lo que hace falta pandas acá; el conteo de
     filas real sale de `_stream_to_path`, no de esto."""
-    df = pd.read_csv(path, nrows=nrows)
+    df = read_dataset_csv(path, nrows=nrows)
     return {c: str(t) for c, t in df.dtypes.items()}
 
 
@@ -231,7 +267,7 @@ def replace_dataset(db: Session, dataset: Dataset, filename: str, file_obj, acti
     (que siempre agrega una fila nueva salvo que el contenido sea idéntico a uno
     previo), esto es un 'sobreescribir' real: cualquier referencia externa al
     dataset_id -- por ejemplo, la metadata de un modelo ya entrenado con él, ver
-    scripts/train_case*.py -- sigue apuntando al mismo registro, ahora con el
+    model_registry.save_version -- sigue apuntando al mismo registro, ahora con el
     contenido nuevo. Valida columnas contra el `case` ya guardado en el dataset."""
     _validate_expected_columns(dataset.case, _peek_header_columns(file_obj))
 

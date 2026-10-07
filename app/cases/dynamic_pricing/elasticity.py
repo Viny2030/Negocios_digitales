@@ -11,10 +11,9 @@ schemas.py sobre por qué esto es on-the-fly y no un modelo entrenado aparte.
 Con pocas observaciones, o si todas fueron al mismo precio (no hay variación
 para estimar una pendiente), no hay forma estadísticamente válida de ajustar
 una recta -- se cae a DEFAULT_ELASTICITY, un valor conservador de referencia
-(demanda moderadamente elástica) en vez de fallar el request. Esto es
-análogo al patrón de "heurística de respaldo" que ya usa el resto de la
-plataforma (ver policy._heuristic en los casos anteriores) aplicado acá a un
-modelo estadístico simple en lugar de una política RL.
+(demanda moderadamente elástica) en vez de fallar el request. Es el mismo
+patrón de "valor de respaldo" que usa LeadMatch cuando la empresa todavía no
+entrenó un modelo (ver app/cases/lead_match/scoring.py).
 """
 
 import math

@@ -4,17 +4,14 @@ histórico de la empresa (columnas: lead_id, origin, time_on_site_minutes,
 company_size, rep_id, converted -- ver EXPECTED_COLUMNS en
 app/services/dataset_ingestion.py).
 
-A diferencia de los casos RL de la plataforma anterior, entrenar una regresión
-logística sobre unos pocos miles de leads es cuestión de segundos -- no hace
-falta encolarlo en Celery como los entrenamientos viejos (ver app/tasks.py):
-el endpoint /train de este caso corre sincrónico y devuelve el resultado en
-la misma respuesta.
+Entrenar una regresión logística sobre unos pocos miles de leads es cuestión
+de segundos, así que no hace falta una cola de tareas: el endpoint /train
+corre sincrónico y devuelve el resultado en la misma respuesta.
 """
 
 import tempfile
 
 import joblib
-import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score
@@ -23,6 +20,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
 
 import model_registry
+from app.services.dataset_ingestion import read_dataset_csv
 from config import get_settings
 
 settings = get_settings()
@@ -52,7 +50,7 @@ class InsufficientTrainingDataError(ValueError):
 
 
 def train_for_company(company_id: int, dataset_path: str) -> tuple[str, dict]:
-    df = pd.read_csv(dataset_path)
+    df = read_dataset_csv(dataset_path)
     missing = [c for c in [*FEATURE_COLUMNS, TARGET_COLUMN] if c not in df.columns]
     if missing:
         raise InsufficientTrainingDataError(f"Al dataset le faltan columnas requeridas: {missing}")
