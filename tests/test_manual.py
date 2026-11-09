@@ -15,6 +15,16 @@ def test_el_manual_se_sirve_sin_api_key(client, path, lang):
     assert f'<html lang="{lang}">' in resp.text
 
 
+def test_la_raiz_lleva_al_manual(client):
+    resp = client.get("/", follow_redirects=False)
+    assert resp.status_code == 307
+    assert resp.headers["location"] == "/manual"
+
+
+def test_el_favicon_no_da_404(client):
+    assert client.get("/favicon.ico").status_code == 204
+
+
 @pytest.mark.parametrize("lang", ["es", "en"])
 def test_el_html_coincide_con_el_generador(lang):
     saved = (gm.STATIC_DIR / gm.PAGES[lang]["file"]).read_text(encoding="utf-8")
