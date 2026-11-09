@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Platform manual</title>
+<style>
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --text: #1c2430; --muted: #5b6675; --line: #d9dee5;
+  --accent: #1d4ed8; --code-bg: #eef1f5; --warn-bg: #fff6e5; --warn-line: #b7791f;
+  --input: #e8eefc; --input-line: #3b5fc4; --control: #fdeee3; --control-line: #bf6a24;
+  --endpoint: #e9e8fb; --endpoint-line: #5a50c2; --process: #eef1f5; --process-line: #66717f;
+  --store: #e3f4ea; --store-line: #2c8050; --output: #fbf3d6; --output-line: #94790f;
+  --muted-node: #f3f4f6; --muted-node-line: #9aa3af;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f141b; --panel: #171e27; --text: #e6eaf0; --muted: #9ba7b6; --line: #2d3743;
+    --accent: #8ab4ff; --code-bg: #212a35; --warn-bg: #2c2415; --warn-line: #d39e3e;
+    --input: #1c2a4a; --input-line: #7f9ee8; --control: #3a281a; --control-line: #d98e50;
+    --endpoint: #2a2750; --endpoint-line: #9a92ea; --process: #252d38; --process-line: #8e99a8;
+    --store: #17352a; --store-line: #5cb98a; --output: #39310f; --output-line: #cdb23f;
+    --muted-node: #20262f; --muted-node-line: #6d7785;
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--bg); color: var(--text); line-height: 1.6; font-size: 16px;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+header { background: var(--panel); border-bottom: 1px solid var(--line); padding: 28px 16px; }
+.wrap { max-width: 960px; margin: 0 auto; padding: 0 16px; }
+header .wrap { padding: 0; display: flex; gap: 16px; justify-content: space-between; align-items: flex-start; }
+h1 { margin: 0 0 6px; font-size: 28px; line-height: 1.2; }
+header p { margin: 0; color: var(--muted); }
+.lang { flex-shrink: 0; font-weight: 600; }
+nav { margin: 24px 0; padding: 16px 20px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+nav ol { margin: 0; padding-left: 20px; columns: 2; column-gap: 32px; }
+section { margin: 36px 0; }
+h2 { font-size: 22px; margin: 0 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+h3 { font-size: 17px; margin: 22px 0 8px; }
+a { color: var(--accent); }
+code { font-family: ui-monospace, Consolas, Menlo, monospace; font-size: .9em; background: var(--code-bg);
+  padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+pre { background: var(--code-bg); padding: 14px; border-radius: 8px; overflow-x: auto; }
+pre code { background: none; padding: 0; overflow-wrap: normal; }
+.table { overflow-x: auto; margin: 12px 0; }
+table { border-collapse: collapse; width: 100%; background: var(--panel); font-size: 15px; }
+th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+th { background: var(--code-bg); }
+.note { background: var(--warn-bg); border-left: 4px solid var(--warn-line); padding: 12px 16px;
+  border-radius: 4px; margin: 14px 0; }
+.graph { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; overflow-x: auto; }
+.graph svg { display: block; width: 100%; min-width: 820px; height: auto; }
+.node rect { stroke-width: 1.4; }
+.node .title { font-size: 14px; font-weight: 650; fill: var(--text); text-anchor: middle; }
+.node .sub { font-size: 12px; fill: var(--muted); text-anchor: middle; }
+.input rect { fill: var(--input); stroke: var(--input-line); }
+.control rect { fill: var(--control); stroke: var(--control-line); }
+.endpoint rect { fill: var(--endpoint); stroke: var(--endpoint-line); }
+.process rect { fill: var(--process); stroke: var(--process-line); }
+.store rect { fill: var(--store); stroke: var(--store-line); }
+.output rect { fill: var(--output); stroke: var(--output-line); }
+.muted rect { fill: var(--muted-node); stroke: var(--muted-node-line); stroke-dasharray: 5 3; }
+.edge { fill: none; stroke: var(--muted); stroke-width: 1.3; }
+.arrow { fill: var(--muted); }
+.edge-label { font-size: 12px; fill: var(--muted); text-anchor: middle; }
+.band-title { font-size: 14px; font-weight: 650; fill: var(--text); }
+.legend { list-style: none; display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 10px 0 0; padding: 0;
+  font-size: 14px; color: var(--muted); }
+.legend li { display: flex; align-items: center; gap: 6px; }
+.swatch { width: 14px; height: 14px; border-radius: 3px; border: 1.4px solid; display: inline-block; }
+.swatch.input { background: var(--input); border-color: var(--input-line); }
+.swatch.control { background: var(--control); border-color: var(--control-line); }
+.swatch.endpoint { background: var(--endpoint); border-color: var(--endpoint-line); }
+.swatch.process { background: var(--process); border-color: var(--process-line); }
+.swatch.store { background: var(--store); border-color: var(--store-line); }
+.swatch.output { background: var(--output); border-color: var(--output-line); }
+footer { color: var(--muted); font-size: 14px; padding: 24px 0 48px; border-top: 1px solid var(--line); }
+@media (max-width: 640px) { nav ol { columns: 1; } h1 { font-size: 24px; } }
+</style>
+</head>
+<body>
+<header><div class="wrap"><div><h1>User manual</h1><p>B2B optimization platform: DynamicPricing, SmartRoute and LeadMatch</p></div><a class="lang" href="/manual">Español</a></div></header>
+<main class="wrap">
+<nav aria-label="Contents"><ol>
+<li><a href="#what">What it is</a></li>
+<li><a href="#start">Getting started</a></li>
+<li><a href="#operation">How it works</a></li>
+<li><a href="#information">What data it handles</a></li>
+<li><a href="#pricing">DynamicPricing</a></li>
+<li><a href="#route">SmartRoute</a></li>
+<li><a href="#lead">LeadMatch</a></li>
+<li><a href="#datasets">Managing datasets</a></li>
+<li><a href="#limits">Limits and errors</a></li>
+<li><a href="#limitations">Current limitations</a></li>
+<li><a href="#install">Installation</a></li>
+</ol></nav>
+
+<section id="what"><h2>1. What it is</h2>
+<p>An API for businesses with three optimization products. Each company has its own key, and its data is kept separate from everyone else's.</p>
+<div class="table"><table>
+<tr><th>Product</th><th>What it does</th><th>What you send it</th></tr>
+<tr><td><strong>DynamicPricing</strong></td><td>Recommends a price for each product</td><td>Cost, current price and sales history, on every request</td></tr>
+<tr><td><strong>SmartRoute</strong></td><td>Plans deliveries for a fleet</td><td>Depot, stops with time windows and vehicles, on every request</td></tr>
+<tr><td><strong>LeadMatch</strong></td><td>Assigns each lead to the best-suited sales rep</td><td>Leads and sales reps; optionally, a history to train your own model</td></tr>
+</table></div>
+<p>The examples use <code>http://localhost:8000</code>: replace it with the address where the API is installed. The full reference for every field is at <a href="/docs">/docs</a>.</p>
+</section>
+
+<section id="start"><h2>2. Getting started</h2>
+<h3>Register your company</h3>
+<pre><code>curl -X POST http://localhost:8000/api/v1/companies \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Demo Company", "contact_email": "demo@company.com"}'</code></pre>
+<p>The response includes the <code>api_key</code> field.</p>
+<div class="note"><strong>Save the key right away.</strong> It is shown only once, because the platform stores just a fingerprint that cannot be turned back into the key.</div>
+<h3>Use the key</h3>
+<p>Send it in the <code>X-API-Key</code> header of every request:</p>
+<pre><code>curl http://localhost:8000/api/v1/companies/me -H "X-API-Key: YOUR_KEY"</code></pre>
+<h3>Change the key</h3>
+<p>If you think it has leaked, generate another one. The old key stops working immediately, so update your systems straight away.</p>
+<pre><code>curl -X POST http://localhost:8000/api/v1/companies/me/rotate-key -H "X-API-Key: YOUR_KEY"</code></pre>
+<p>Generating a new key requires the current one. If you have lost it, the platform administrator has to step in.</p>
+</section>
+
+<section id="operation"><h2>3. How it works</h2>
+<p>Every request first goes through four controls, in this order. It then follows one of the five lines, depending on the route called.</p>
+<div class="graph"><svg viewBox="0 0 1020 620" role="img" aria-label="Operation graph: how a request moves through the controls and the three products"><defs><marker id="af" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrow" d="M0 0 L10 5 L0 10 z"/></marker></defs><path class="edge" d="M200 59 L230 59" marker-end="url(#af)"/><path class="edge" d="M400 59 L430 59" marker-end="url(#af)"/><path class="edge" d="M600 59 L630 59" marker-end="url(#af)"/><path class="edge" d="M800 59 L830 59" marker-end="url(#af)"/><path class="edge" d="M915 88 L915 114 L22 114 L22 169 L50 169" marker-end="url(#af)"/><path class="edge" d="M915 88 L915 114 L22 114 L22 269 L50 269" marker-end="url(#af)"/><path class="edge" d="M915 88 L915 114 L22 114 L22 369 L50 369" marker-end="url(#af)"/><path class="edge" d="M915 88 L915 114 L22 114 L22 469 L50 469" marker-end="url(#af)"/><path class="edge" d="M915 88 L915 114 L22 114 L22 569 L50 569" marker-end="url(#af)"/><path class="edge" d="M250 169 L290 169" marker-end="url(#af)"/><path class="edge" d="M490 169 L530 169" marker-end="url(#af)"/><path class="edge" d="M730 169 L770 169" marker-end="url(#af)"/><path class="edge" d="M250 269 L290 269" marker-end="url(#af)"/><path class="edge" d="M490 269 L530 269" marker-end="url(#af)"/><path class="edge" d="M730 269 L770 269" marker-end="url(#af)"/><path class="edge" d="M250 369 L290 369" marker-end="url(#af)"/><path class="edge" d="M490 369 L530 369" marker-end="url(#af)"/><path class="edge" d="M250 469 L290 469" marker-end="url(#af)"/><path class="edge" d="M490 469 L530 469" marker-end="url(#af)"/><path class="edge" d="M250 569 L290 569" marker-end="url(#af)"/><path class="edge" d="M490 569 L530 569" marker-end="url(#af)"/><path class="edge" d="M730 569 L770 569" marker-end="url(#af)"/><path class="edge" d="M570 398 L450 440" marker-end="url(#af)"/><path class="edge" d="M570 498 L450 540" marker-end="url(#af)"/><g class="node input" data-node="client"><rect x="30" y="30" width="170" height="58" rx="8"/><text class="title" x="115" y="56.5">Client system</text><text class="sub" x="115" y="74.5">sends the request</text></g><g class="node control" data-node="ip"><rect x="230" y="30" width="170" height="58" rx="8"/><text class="title" x="315" y="56.5">Per-IP ceiling</text><text class="sub" x="315" y="74.5">600 per minute</text></g><g class="node control" data-node="size"><rect x="430" y="30" width="170" height="58" rx="8"/><text class="title" x="515" y="56.5">Size cap</text><text class="sub" x="515" y="74.5">25 MB file, 10 MB JSON</text></g><g class="node control" data-node="company_limit"><rect x="630" y="30" width="170" height="58" rx="8"/><text class="title" x="715" y="56.5">Per-company limit</text><text class="sub" x="715" y="74.5">120 per minute</text></g><g class="node control" data-node="auth"><rect x="830" y="30" width="170" height="58" rx="8"/><text class="title" x="915" y="56.5">Authentication</text><text class="sub" x="915" y="74.5">X-API-Key header</text></g><g class="node endpoint" data-node="pricing_ep"><rect x="50" y="140" width="200" height="58" rx="8"/><text class="title" x="150" y="166.5">DynamicPricing</text><text class="sub" x="150" y="184.5">/dynamic-pricing/price</text></g><g class="node process" data-node="elasticity"><rect x="290" y="140" width="200" height="58" rx="8"/><text class="title" x="390" y="166.5">Elasticity</text><text class="sub" x="390" y="184.5">log-log regression</text></g><g class="node process" data-node="optimizer"><rect x="530" y="140" width="200" height="58" rx="8"/><text class="title" x="630" y="166.5">Price optimizer</text><text class="sub" x="630" y="184.5">margin and daily variation</text></g><g class="node output" data-node="price"><rect x="770" y="140" width="200" height="58" rx="8"/><text class="title" x="870" y="166.5">Recommended price</text><text class="sub" x="870" y="184.5">per SKU</text></g><g class="node endpoint" data-node="route_ep"><rect x="50" y="240" width="200" height="58" rx="8"/><text class="title" x="150" y="266.5">SmartRoute</text><text class="sub" x="150" y="284.5">/smart-route/plan-routes</text></g><g class="node process" data-node="savings"><rect x="290" y="240" width="200" height="58" rx="8"/><text class="title" x="390" y="266.5">Route building</text><text class="sub" x="390" y="284.5">Clarke-Wright savings</text></g><g class="node process" data-node="feasible"><rect x="530" y="240" width="200" height="58" rx="8"/><text class="title" x="630" y="266.5">Vehicles and schedule</text><text class="sub" x="630" y="284.5">2-opt and time windows</text></g><g class="node output" data-node="routes"><rect x="770" y="240" width="200" height="58" rx="8"/><text class="title" x="870" y="266.5">Routes</text><text class="sub" x="870" y="284.5">and unassigned stops</text></g><g class="node endpoint" data-node="upload_ep"><rect x="50" y="340" width="200" height="58" rx="8"/><text class="title" x="150" y="366.5">Data upload</text><text class="sub" x="150" y="384.5">/datasets/lead_match</text></g><g class="node process" data-node="ingest"><rect x="290" y="340" width="200" height="58" rx="8"/><text class="title" x="390" y="366.5">Ingestion</text><text class="sub" x="390" y="384.5">validates and deduplicates</text></g><g class="node store" data-node="csv"><rect x="530" y="340" width="200" height="58" rx="8"/><text class="title" x="630" y="366.5">CSV file</text><text class="sub" x="630" y="384.5">and dataset record</text></g><g class="node endpoint" data-node="train_ep"><rect x="50" y="440" width="200" height="58" rx="8"/><text class="title" x="150" y="466.5">Training</text><text class="sub" x="150" y="484.5">/lead-match/train</text></g><g class="node process" data-node="training"><rect x="290" y="440" width="200" height="58" rx="8"/><text class="title" x="390" y="466.5">Logistic regression</text><text class="sub" x="390" y="484.5">one per company</text></g><g class="node store" data-node="registry"><rect x="530" y="440" width="200" height="58" rx="8"/><text class="title" x="630" y="466.5">Model registry</text><text class="sub" x="630" y="484.5">versions and current</text></g><g class="node endpoint" data-node="match_ep"><rect x="50" y="540" width="200" height="58" rx="8"/><text class="title" x="150" y="566.5">LeadMatch</text><text class="sub" x="150" y="584.5">/lead-match/match</text></g><g class="node process" data-node="scoring"><rect x="290" y="540" width="200" height="58" rx="8"/><text class="title" x="390" y="566.5">Scoring</text><text class="sub" x="390" y="584.5">model or heuristic</text></g><g class="node process" data-node="hungarian"><rect x="530" y="540" width="200" height="58" rx="8"/><text class="title" x="630" y="566.5">Assignment</text><text class="sub" x="630" y="584.5">Hungarian algorithm</text></g><g class="node output" data-node="assignments"><rect x="770" y="540" width="200" height="58" rx="8"/><text class="title" x="870" y="566.5">Assignments</text><text class="sub" x="870" y="584.5">lead to sales rep</text></g><text class="edge-label" x="575" y="428">reads</text><text class="edge-label" x="615" y="528">current model</text></svg></div><ul class="legend"><li><span class="swatch input"></span>Input</li><li><span class="swatch control"></span>Control</li><li><span class="swatch endpoint"></span>API route</li><li><span class="swatch process"></span>Process</li><li><span class="swatch store"></span>Stored data</li><li><span class="swatch output"></span>Response</li></ul>
+<h3>How to read the graph</h3>
+<ul>
+<li><strong>Controls (top row):</strong> they stop abuse before resources are spent and check the key. If one fails, the request ends there with an error (see <a href="#limits">Limits and errors</a>).</li>
+<li><strong>DynamicPricing and SmartRoute:</strong> they calculate everything from the request itself and store nothing.</li>
+<li><strong>Data upload and Training:</strong> these are optional and only serve LeadMatch. The uploaded file feeds the logistic regression, which produces a new version in the model registry.</li>
+<li><strong>LeadMatch:</strong> it uses the company's current model. If there is none yet, it scores with a fallback formula and says so with <code>used_default_scoring: true</code>.</li>
+</ul>
+</section>
+
+<section id="information"><h2>4. What data it handles</h2>
+<p>The platform stores only company data and what LeadMatch needs. Whatever you send to DynamicPricing, SmartRoute and <code>/lead-match/match</code> is used to respond and then discarded.</p>
+<div class="graph"><svg viewBox="0 0 1050 515" role="img" aria-label="Information graph: which data the platform stores and which it does not"><defs><marker id="ai" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrow" d="M0 0 L10 5 L0 10 z"/></marker></defs><path class="edge" d="M300 82 L385 82" marker-end="url(#ai)"/><path class="edge" d="M655 82 L740 82" marker-end="url(#ai)"/><path class="edge" d="M875 134 L875 190" marker-end="url(#ai)"/><path class="edge" d="M1010 82 L1032 82 L1032 326 L1010 326" marker-end="url(#ai)"/><path class="edge" d="M740 226 L655 226" marker-end="url(#ai)"/><path class="edge" d="M260 134 L260 170 L342 170 L342 215 L385 215" marker-end="url(#ai)"/><path class="edge" d="M300 250 L385 250" marker-end="url(#ai)"/><g class="node store" data-node="company"><rect x="30" y="30" width="270" height="104" rx="8"/><text class="title" x="165" y="57">Company</text><text class="sub" x="165" y="75">companies table</text><text class="sub" x="165" y="90">id, name, contact_email</text><text class="sub" x="165" y="105">api_key_hash, api_key_prefix</text><text class="sub" x="165" y="120">is_active, created_at</text></g><g class="node store" data-node="dataset"><rect x="385" y="30" width="270" height="104" rx="8"/><text class="title" x="520" y="57">Dataset</text><text class="sub" x="520" y="75">datasets table</text><text class="sub" x="520" y="90">id, name, row_count, status</text><text class="sub" x="520" y="105">content_hash, is_active</text><text class="sub" x="520" y="120">file_path</text></g><g class="node store" data-node="csv"><rect x="740" y="30" width="270" height="104" rx="8"/><text class="title" x="875" y="64.5">CSV file</text><text class="sub" x="875" y="82.5">storage/datasets/&lt;company&gt;/</text><text class="sub" x="875" y="97.5">lead_match/</text><text class="sub" x="875" y="112.5">uploaded by the company</text></g><g class="node store" data-node="current"><rect x="30" y="205" width="270" height="72" rx="8"/><text class="title" x="165" y="231">Current version</text><text class="sub" x="165" y="249">current.json</text><text class="sub" x="165" y="264">the one /lead-match/match uses</text></g><g class="node store" data-node="model"><rect x="385" y="190" width="270" height="104" rx="8"/><text class="title" x="520" y="224.5">Model version</text><text class="sub" x="520" y="242.5">storage/models/&lt;company&gt;/lead_match/</text><text class="sub" x="520" y="257.5">versions/&lt;version&gt;/</text><text class="sub" x="520" y="272.5">model.joblib, metadata.json</text></g><g class="node process" data-node="train_cols"><rect x="740" y="190" width="270" height="72" rx="8"/><text class="title" x="875" y="216">Training columns</text><text class="sub" x="875" y="234">origin, time_on_site_minutes,</text><text class="sub" x="875" y="249">company_size, converted</text></g><g class="node muted" data-node="unused_cols"><rect x="740" y="290" width="270" height="72" rx="8"/><text class="title" x="875" y="323.5">Columns unused in training</text><text class="sub" x="875" y="341.5">lead_id, rep_id</text></g><g class="node input" data-node="pricing_in"><rect x="30" y="430" width="300" height="72" rx="8"/><text class="title" x="180" y="463.5">DynamicPricing data</text><text class="sub" x="180" y="481.5">skus, purchase_events</text></g><g class="node input" data-node="route_in"><rect x="375" y="430" width="300" height="72" rx="8"/><text class="title" x="525" y="463.5">SmartRoute data</text><text class="sub" x="525" y="481.5">depot, stops, vehicles</text></g><g class="node input" data-node="match_in"><rect x="720" y="430" width="300" height="72" rx="8"/><text class="title" x="870" y="463.5">LeadMatch data</text><text class="sub" x="870" y="481.5">leads, reps</text></g><text class="edge-label" x="342" y="72">1 to N</text><text class="edge-label" x="697" y="72">file_path</text><text class="edge-label" x="915" y="166">contains</text><text class="edge-label" x="697" y="216">trains</text><text class="edge-label" x="300" y="160">1 to N</text><text class="edge-label" x="342" y="270">points to</text><text class="band-title" x="30" y="415">Sent with each request and not stored</text></svg></div>
+<h3>How to read the graph</h3>
+<ul>
+<li><strong>Company:</strong> only the key's fingerprint (<code>api_key_hash</code>) and its first characters (<code>api_key_prefix</code>), which help you recognize it, are stored.</li>
+<li><strong>Dataset and CSV file:</strong> a company can have several datasets. The table describes each one, and the file lives in the company's own folder.</li>
+<li><strong>Columns:</strong> the model learns from four columns. <code>lead_id</code> and <code>rep_id</code> are accepted in the file but not used for training.</li>
+<li><strong>Model version and Current version:</strong> each training run adds a version, with its metrics and the dataset it used. <code>current.json</code> says which one is in use: a new version only becomes current if it is not worse (see <a href="#lead">LeadMatch</a>).</li>
+</ul>
+</section>
+
+<section id="pricing"><h2>5. DynamicPricing</h2>
+<p>It estimates how demand for each product changes with price and looks for the best price within your rules.</p>
+<pre><code>curl -X POST http://localhost:8000/api/v1/dynamic-pricing/price \
+  -H "X-API-Key: YOUR_KEY" -H "Content-Type: application/json" \
+  -d '{
+    "skus": [{
+      "sku_id": "sku-1", "base_cost": 100, "current_price": 150, "stock": 50,
+      "min_margin_pct": 0.15, "max_daily_variation_pct": 0.10,
+      "purchase_events": [
+        {"price": 140, "quantity_sold": 30}, {"price": 150, "quantity_sold": 22},
+        {"price": 160, "quantity_sold": 15}, {"price": 170, "quantity_sold": 9}
+      ]
+    }],
+    "objective": "margin"
+  }'</code></pre>
+<div class="table"><table>
+<tr><th>Field</th><th>Meaning</th></tr>
+<tr><td><code>base_cost</code>, <code>current_price</code></td><td>Unit cost and current price. Required.</td></tr>
+<tr><td><code>purchase_events</code></td><td>Past sales: price and quantity. Estimating demand takes at least 4 events with sales and 2 different prices.</td></tr>
+<tr><td><code>stock</code></td><td>Units available: no more than this is expected to sell. It must refer to the same period as <code>purchase_events</code>. Required.</td></tr>
+<tr><td><code>min_margin_pct</code></td><td>Minimum profit <strong>on cost</strong>. Default: 0.15.</td></tr>
+<tr><td><code>max_daily_variation_pct</code></td><td>How far the price may move from the current one. Default: 0.05.</td></tr>
+<tr><td><code>competitor_price</code>, <code>max_competitor_premium_pct</code></td><td>The competitor's price and how far above it you may sell. Default: up to 0.10 more. Minimum margin and daily variation take priority.</td></tr>
+<tr><td><code>objective</code></td><td><code>margin</code> seeks the highest expected profit. <code>volume</code>, the most units sold; if stock runs short, it uses the highest price that still sells everything.</td></tr>
+</table></div>
+<h3>How to read the response</h3>
+<ul>
+<li><code>recommended_price</code>: the suggested price.</li>
+<li><code>used_default_elasticity</code>: if <code>true</code>, there was no data to estimate demand. The current price is kept, adjusted only if it breaks a rule, and <code>expected_quantity</code> and <code>expected_profit</code> come back empty. The price is also kept when there is no stock.</li>
+<li><code>expected_margin_on_cost_pct</code>: profit on cost; this is the one to compare with <code>min_margin_pct</code>.</li>
+<li><code>expected_margin_pct</code>: profit <strong>on price</strong>. With a cost of 100 and a price of 115, the first is 15% and this one is 13%.</li>
+<li><code>constraints_applied</code>: the rules applied. If they conflict, minimum margin wins, then daily variation, and the competitor last, and this field says so.</li>
+</ul>
+</section>
+
+<section id="route"><h2>6. SmartRoute</h2>
+<p>It distributes stops among vehicles and sets the order of each trip.</p>
+<pre><code>curl -X POST http://localhost:8000/api/v1/smart-route/plan-routes \
+  -H "X-API-Key: YOUR_KEY" -H "Content-Type: application/json" \
+  -d '{
+    "depot": {"lat": -34.6037, "lon": -58.3816},
+    "stops": [
+      {"stop_id": "s1", "location": {"lat": -34.61, "lon": -58.38}, "demand": 5,
+       "time_window_start_min": 0, "time_window_end_min": 240},
+      {"stop_id": "s2", "location": {"lat": -34.60, "lon": -58.40}, "demand": 8,
+       "time_window_start_min": 0, "time_window_end_min": 240}
+    ],
+    "vehicles": [{"vehicle_id": "v1", "capacity": 20}]
+  }'</code></pre>
+<p>Times are expressed in <strong>minutes from the start of the shift</strong>. Defaults: 5 minutes per stop, 30 km/h and a maximum of 480 minutes per route, including the return to the depot.</p>
+<h3>How to read the response</h3>
+<ul>
+<li><code>routes</code>: for each vehicle, its stops in order, with arrival and departure, distance, duration until back at the depot, and load.</li>
+<li><code>unassigned_stops</code>: the stops that did not fit in any vehicle because of capacity, schedule or duration. <strong>Always check this</strong> and handle those stops another way.</li>
+</ul>
+</section>
+
+<section id="lead"><h2>7. LeadMatch</h2>
+<p>It estimates how likely each lead is to buy and assigns it to the sales rep who adds the most, without exceeding anyone's capacity. It works from day one; with your history it can score based on your own results.</p>
+<h3>Step 1 (optional): upload your history</h3>
+<p>A <code>.csv</code>, <code>.tsv</code> or <code>.txt</code> file of up to 25 MB. CSV files from Spanish-language Excel are accepted. The columns <code>origin</code>, <code>time_on_site_minutes</code> and <code>company_size</code> describe the lead; <code>converted</code> says whether the lead bought (<code>1</code>/<code>0</code>, <code>yes</code>/<code>no</code>, <code>sí</code>/<code>no</code> or <code>true</code>/<code>false</code>).</p>
+<pre><code>curl -X POST http://localhost:8000/api/v1/datasets/lead_match \
+  -H "X-API-Key: YOUR_KEY" -F "file=@leads.csv"</code></pre>
+<h3>Step 2 (optional): train</h3>
+<p>This takes at least 20 complete rows, with both <code>0</code> and <code>1</code> cases. Use the <code>id</code> returned by the previous step.</p>
+<pre><code>curl -X POST http://localhost:8000/api/v1/lead-match/train \
+  -H "X-API-Key: YOUR_KEY" -H "Content-Type: application/json" -d '{"dataset_id": 1}'</code></pre>
+<p>The response includes <code>metrics.auc</code>: 0.5 is the same as scoring at random, and the closer to 1, the better.</p>
+<p><strong>Training does not always change the model in use.</strong> The new version is saved, but it only becomes current if its AUC reaches 0.55 and it is no worse than the current model measured on the same rows. Check <code>promoted</code> and <code>promotion_reason</code> in the response.</p>
+<h3>Step 3: assign</h3>
+<pre><code>curl -X POST http://localhost:8000/api/v1/lead-match/match \
+  -H "X-API-Key: YOUR_KEY" -H "Content-Type: application/json" \
+  -d '{
+    "leads": [{"lead_id": "l1", "origin": "paid_ads", "time_on_site_minutes": 22, "company_size": 300}],
+    "reps": [{"rep_id": "r1", "capacity": 2}, {"rep_id": "r2", "capacity": 3, "specialties": ["paid_ads"]}]
+  }'</code></pre>
+<p>For each rep you can set <code>historical_close_rate</code> (default: 0.5) and <code>specialties</code>, which multiply the score by <code>specialty_bonus</code> (default: 1.2).</p>
+<h3>How to read the response</h3>
+<ul>
+<li><code>assignments</code>: lead, sales rep, purchase probability and score.</li>
+<li><code>unmatched_leads</code>: leads with no rep because of insufficient capacity.</li>
+<li><code>used_default_scoring</code>: <code>true</code> means the fallback formula was used instead of your own model.</li>
+</ul>
+<h3>View versions and return to an earlier one</h3>
+<p>To list the versions, with their metrics and which one is current:</p>
+<pre><code>curl http://localhost:8000/api/v1/lead-match/models -H "X-API-Key: YOUR_KEY"</code></pre>
+<p>To make a version current, whether an earlier one or one that training did not promote:</p>
+<pre><code>curl -X POST http://localhost:8000/api/v1/lead-match/models/{version_id}/promote -H "X-API-Key: YOUR_KEY"</code></pre>
+</section>
+
+<section id="datasets"><h2>8. Managing datasets</h2>
+<div class="table"><table>
+<tr><th>Action</th><th>Route</th><th>Details</th></tr>
+<tr><td>Upload</td><td><code>POST /api/v1/datasets/lead_match</code></td><td>A file identical to one already uploaded is not duplicated.</td></tr>
+<tr><td>List</td><td><code>GET /api/v1/datasets/lead_match</code></td><td><code>is_active</code> marks the current one.</td></tr>
+<tr><td>View first rows</td><td><code>GET /api/v1/datasets/lead_match/{id}/preview</code></td><td>Shows up to 20 rows.</td></tr>
+<tr><td>Replace</td><td><code>PUT /api/v1/datasets/lead_match/{id}</code></td><td>Corrects the content and keeps the same <code>id</code>.</td></tr>
+<tr><td>Mark as current</td><td><code>POST /api/v1/datasets/lead_match/{id}/activate</code></td><td>For information only: training always takes a <code>dataset_id</code>.</td></tr>
+<tr><td>Delete</td><td><code>DELETE /api/v1/datasets/lead_match/{id}</code></td><td>Deletes the file and the record, permanently. Models already trained are not affected.</td></tr>
+</table></div>
+</section>
+
+<section id="limits"><h2>9. Limits and errors</h2>
+<div class="table"><table>
+<tr><th>Limit</th><th>Value</th></tr>
+<tr><td>Requests per company</td><td>120 per minute; <code>/train</code>, 5; uploading or replacing datasets, 10</td></tr>
+<tr><td>Requests per IP</td><td>600 per minute</td></tr>
+<tr><td>Sign-ups and key changes per IP</td><td>10 per hour each</td></tr>
+<tr><td>Size</td><td>25 MB per file and 10 MB per JSON request</td></tr>
+<tr><td>DynamicPricing</td><td>500 products and 5,000 sales per product</td></tr>
+<tr><td>SmartRoute</td><td>100 stops and 100 vehicles</td></tr>
+<tr><td>LeadMatch</td><td>1,000 leads, 200 sales reps and 2,000,000 lead-by-slot combinations</td></tr>
+</table></div>
+<div class="table"><table>
+<tr><th>Code</th><th>What happened</th><th>What to do</th></tr>
+<tr><td>400</td><td>The file is invalid or does not look like a leads dataset</td><td>Check the format and columns</td></tr>
+<tr><td>401</td><td>The key is missing or invalid</td><td>Check the <code>X-API-Key</code> header</td></tr>
+<tr><td>404</td><td>The dataset does not exist or belongs to another company</td><td>Check the <code>id</code></td></tr>
+<tr><td>409</td><td>The email is already registered</td><td>Use the existing key</td></tr>
+<tr><td>413</td><td>The file or request is too large</td><td>Reduce or split it</td></tr>
+<tr><td>422</td><td>Data is missing, badly formatted, or the request exceeds a cap</td><td>The response detail names the field or column</td></tr>
+<tr><td>429</td><td>A request limit was exceeded</td><td>Wait and retry</td></tr>
+</table></div>
+</section>
+
+<section id="limitations"><h2>10. Current limitations</h2>
+<p>These are worth knowing before you use the results in a real decision.</p>
+<h3>DynamicPricing</h3>
+<ul>
+<li>It estimates demand from price alone: it does not consider seasonality, promotions or market changes. With few events, the estimate is weak.</li>
+<li>The competitor only acts as a ceiling: it does not push the price down if you are already below that limit.</li>
+</ul>
+<h3>SmartRoute</h3>
+<ul>
+<li>It calculates in straight lines at constant speed, with no streets or traffic: <strong>real times will be longer</strong>, so leave some slack in your time windows.</li>
+<li>It looks for a good solution, not necessarily the best possible one. A stop listed as unassigned might fit with a different distribution of routes.</li>
+<li>All routes leave the depot at the start of the shift, and there is a single depot.</li>
+</ul>
+<h3>LeadMatch</h3>
+<ul>
+<li>The model uses only three lead attributes: origin, time on site and company size. It does not learn from each rep's history: you supply the close rate and specialties.</li>
+<li>Promoting a version does not prove it will work well on future leads: AUC is measured on historical data.</li>
+</ul>
+<h3>Account</h3>
+<ul>
+<li>Sign-up does not verify the email, and the 409 error reveals whether an email is already registered.</li>
+</ul>
+</section>
+
+<section id="install"><h2>11. Installation</h2>
+<p>For whoever installs the platform. Requires Python 3.11.</p>
+<pre><code>pip install -r requirements.txt
+cp .env.example .env
+alembic upgrade head
+uvicorn app.main:app</code></pre>
+<ul>
+<li><strong>Existing database:</strong> back it up and run <code>alembic upgrade head</code> before starting the new version. Keys already issued keep working, but that migration cannot be reverted.</li>
+<li><strong>Behind a proxy or PaaS:</strong> set <code>TRUSTED_PROXY_HOPS</code> (see <code>.env.example</code>). Otherwise, all clients share the per-IP limits.</li>
+<li><strong>Files:</strong> datasets and models are stored in <code>storage/</code>. On a PaaS, mount a persistent volume there or they will be lost on redeploy.</li>
+<li><strong>Multiple instances:</strong> limit counters live in each process's memory. Sharing them requires common storage such as Redis.</li>
+</ul>
+</section>
+</main>
+<div class="wrap"><footer>Technical API reference: <a href="/docs">/docs</a>.</footer></div>
+</body>
+</html>

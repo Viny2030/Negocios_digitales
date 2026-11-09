@@ -35,7 +35,8 @@ def match_leads(
     # slot_rep_ids[j] = a qué rep_id corresponde la columna j de la matriz.
     slot_rep_ids: list[str] = []
     for rep in capacitated_reps:
-        slot_rep_ids.extend([rep.rep_id] * rep.capacity)
+        # Más cupos que leads no cambian el resultado y solo agrandan la matriz.
+        slot_rep_ids.extend([rep.rep_id] * min(rep.capacity, len(leads)))
 
     reps_by_id = {rep.rep_id: rep for rep in capacitated_reps}
     score_matrix = [

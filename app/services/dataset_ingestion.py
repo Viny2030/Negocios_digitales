@@ -23,6 +23,7 @@ import datetime as dt
 import hashlib
 import json
 import os
+import re
 import tempfile
 import uuid
 
@@ -60,6 +61,20 @@ _FALLBACK_ENCODING = "latin-1"
 class DatasetSchemaError(ValueError):
     """El CSV se pudo leer, pero sus columnas no coinciden con las esperadas para el
     caso indicado (probablemente se subió el dataset de otro caso)."""
+
+
+class DatasetTooLargeError(ValueError):
+    """El archivo supera settings.MAX_UPLOAD_BYTES."""
+
+
+def safe_filename(filename: str) -> str:
+    """Deja solo el nombre del archivo, sin rutas ni caracteres problemáticos. El nombre
+    lo manda el cliente y termina formando parte de una ruta en disco: sin esto, en
+    Windows `../../x.csv` se guarda fuera de la carpeta de la empresa."""
+    name = filename.replace("\\", "/").rsplit("/", 1)[-1]
+    name = re.sub(r"[^\w.\- ]", "_", name).strip(" .")
+    stem, extension = os.path.splitext(name)
+    return f"{stem[:100] or 'dataset'}{extension[:10]}"
 
 
 def detect_delimiter(header_line: str) -> str:
@@ -130,6 +145,7 @@ def _stream_to_path(file_obj, dest_path: str, chunk_size: int = 1024 * 1024) -> 
     hasher = hashlib.sha256()
     newline_count = 0
     last_byte = b""
+    total_bytes = 0
     with open(dest_path, "wb") as out:
         while True:
             chunk = file_obj.read(chunk_size)
@@ -137,6 +153,11 @@ def _stream_to_path(file_obj, dest_path: str, chunk_size: int = 1024 * 1024) -> 
                 break
             if isinstance(chunk, str):
                 chunk = chunk.encode("utf-8")
+            total_bytes += len(chunk)
+            if total_bytes > settings.MAX_UPLOAD_BYTES:
+                raise DatasetTooLargeError(
+                    f"El archivo supera el máximo de {settings.MAX_UPLOAD_BYTES // (1024 * 1024)} MB"
+                )
             hasher.update(chunk)
             newline_count += chunk.count(b"\n")
             last_byte = chunk[-1:]
@@ -208,6 +229,7 @@ def ingest_dataset(
     descarta el archivo temporal, se reactiva el existente (si `activate=True`) y
     se devuelve con `created=False`."""
     _validate_expected_columns(case, _peek_header_columns(file_obj))
+    filename = safe_filename(filename)
 
     company_dir = _company_case_dir(company_id, case)
     tmp_fd, tmp_path = tempfile.mkstemp(dir=company_dir, prefix=".upload_")
@@ -286,7 +308,7 @@ def replace_dataset(db: Session, dataset: Dataset, filename: str, file_obj, acti
     dataset.content_hash = content_hash
     dataset.row_count = row_count
     dataset.columns_schema = json.dumps(columns_schema)
-    dataset.name = filename
+    dataset.name = safe_filename(filename)
     dataset.status = DatasetStatus.validated
     dataset.updated_at = dt.datetime.now(dt.UTC)
     db.commit()

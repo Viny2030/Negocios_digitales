@@ -1,7 +1,11 @@
 """
 Optimización con restricciones sobre la curva de demanda estimada (ver
-elasticity.py). Restricciones de negocio: margen mínimo sobre el costo base y
-variación diaria máxima respecto al precio vigente.
+elasticity.py). Restricciones de negocio: margen mínimo sobre el costo base,
+variación diaria máxima respecto al precio vigente y, si se informa, un techo
+respecto del precio del competidor. El stock limita las unidades vendibles.
+
+Sin datos para estimar la demanda, o sin stock, no hay fundamento para mover el
+precio: se mantiene el actual y solo se ajusta si rompe una de esas reglas.
 
 La curva de beneficio profit(price) = (price - cost) * quantity(price), con
 quantity(price) = exp(a) * price**b (log-log), es no lineal -- por eso el
@@ -15,6 +19,7 @@ variacion, precio_maximo_por_variacion] -- sigue siendo un intervalo simple,
 así que no hace falta un solver LP/QP de propósito general para esto.
 """
 
+import math
 from dataclasses import dataclass
 
 from scipy.optimize import minimize_scalar
@@ -26,7 +31,7 @@ from app.cases.dynamic_pricing.schemas import PricingObjective
 @dataclass
 class PriceOptimizationResult:
     price: float
-    expected_quantity: float
+    expected_quantity: float | None  # None: no hubo datos para estimar la demanda
     constraints_applied: list[str]
 
 
@@ -35,6 +40,8 @@ def _feasible_price_range(
     current_price: float,
     min_margin_pct: float,
     max_daily_variation_pct: float,
+    competitor_price: float | None = None,
+    max_competitor_premium_pct: float = 0.10,
 ) -> tuple[float, float, list[str]]:
     constraints_applied: list[str] = []
 
@@ -64,6 +71,20 @@ def _feasible_price_range(
         )
         return margin_floor, margin_floor, constraints_applied
 
+    if competitor_price is not None:
+        competitor_cap = competitor_price * (1 + max_competitor_premium_pct)
+        if competitor_cap >= high:
+            constraints_applied.append(f"competidor: el techo de {competitor_cap:.4f} no limita el rango")
+        elif competitor_cap >= low:
+            high = competitor_cap
+            constraints_applied.append(f"competidor: precio<={competitor_cap:.4f}")
+        else:
+            high = low
+            constraints_applied.append(
+                f"conflicto: el techo por competidor ({competitor_cap:.4f}) queda por debajo del "
+                f"mínimo permitido por margen y variación diaria -- se usa ese mínimo ({low:.4f})"
+            )
+
     return low, high, constraints_applied
 
 
@@ -74,28 +95,52 @@ def optimize_price(
     min_margin_pct: float,
     max_daily_variation_pct: float,
     objective: PricingObjective,
+    stock: int | None = None,
+    competitor_price: float | None = None,
+    max_competitor_premium_pct: float = 0.10,
 ) -> PriceOptimizationResult:
     low, high, constraints_applied = _feasible_price_range(
-        base_cost, current_price, min_margin_pct, max_daily_variation_pct
+        base_cost,
+        current_price,
+        min_margin_pct,
+        max_daily_variation_pct,
+        competitor_price,
+        max_competitor_premium_pct,
     )
+    current_within_rules = min(max(current_price, low), high)
+
+    if elasticity.is_default:
+        constraints_applied.append(
+            "sin_datos: no se pudo estimar la demanda -- se mantiene el precio actual, "
+            "ajustado solo si rompe una regla"
+        )
+        return PriceOptimizationResult(current_within_rules, None, constraints_applied)
+
+    if stock == 0:
+        constraints_applied.append("sin_stock: no hay unidades para vender -- se mantiene el precio actual")
+        return PriceOptimizationResult(current_within_rules, 0.0, constraints_applied)
+
+    def sellable_quantity(p: float) -> float:
+        demand = elasticity.expected_quantity(p)
+        return demand if stock is None else min(demand, float(stock))
 
     if low == high:
         price = low
     elif objective == PricingObjective.volume:
-        # Con demanda decreciente en precio (slope < 0, que es lo que fit_elasticity
-        # garantiza salvo el caso default), el volumen esperado se maximiza en el
-        # extremo inferior del rango factible -- no hace falta un solver para esto,
-        # es la solución de esquina directa.
+        # La demanda baja con el precio, así que el mayor volumen está en el piso del
+        # rango. Con stock limitado, alcanza con el precio al que la demanda iguala al
+        # stock: bajar más no vende una unidad extra y solo resigna ganancia.
         price = low
+        if stock is not None:
+            price_selling_all_stock = math.exp((math.log(stock) - elasticity.intercept) / elasticity.slope)
+            price = min(max(price_selling_all_stock, low), high)
     else:
 
-        def negative_profit(p: float) -> float:
-            return -(p - base_cost) * elasticity.expected_quantity(p)
+        def profit(p: float) -> float:
+            return (p - base_cost) * sellable_quantity(p)
 
-        result = minimize_scalar(negative_profit, bounds=(low, high), method="bounded")
-        price = float(result.x)
+        result = minimize_scalar(lambda p: -profit(p), bounds=(low, high), method="bounded")
+        # El método acotado nunca evalúa los extremos exactos, y el óptimo puede estar en uno.
+        price = max(float(result.x), low, high, key=profit)
 
-    expected_quantity = elasticity.expected_quantity(price)
-    return PriceOptimizationResult(
-        price=price, expected_quantity=expected_quantity, constraints_applied=constraints_applied
-    )
+    return PriceOptimizationResult(price, sellable_quantity(price), constraints_applied)

@@ -10,6 +10,7 @@ import math
 from dataclasses import dataclass
 
 import joblib
+import pandas as pd
 
 from app.cases.lead_match.schemas import LeadFeatures
 
@@ -28,23 +29,29 @@ class ConversionScorer:
     is_default: bool
 
     def predict_proba(self, lead: LeadFeatures) -> float:
-        if self.model is None:
-            return self._heuristic_score(lead)
-        import pandas as pd
+        return self.predict_many([lead])[lead.lead_id]
 
-        row = pd.DataFrame(
+    def predict_many(self, leads: list[LeadFeatures]) -> dict[str, float]:
+        """Probabilidad de conversión por lead_id. Evalúa todos juntos: una tabla por lead
+        tardaba 6 segundos con 1.000 leads."""
+        if self.model is None:
+            return {lead.lead_id: self._heuristic_score(lead) for lead in leads}
+
+        rows = pd.DataFrame(
             [
                 {
                     "origin": lead.origin,
                     "time_on_site_minutes": lead.time_on_site_minutes,
                     "company_size": lead.company_size,
                 }
+                for lead in leads
             ]
         )
-        proba = self.model.predict_proba(row)[0]
+        probabilities = self.model.predict_proba(rows)
         # predict_proba devuelve [P(clase=0), P(clase=1)] -- converted=1 es la positiva.
         classes = list(self.model.classes_)
-        return float(proba[classes.index(1)]) if 1 in classes else float(proba[-1])
+        positive = classes.index(1) if 1 in classes else -1
+        return {lead.lead_id: float(row[positive]) for lead, row in zip(leads, probabilities, strict=True)}
 
     @staticmethod
     def _heuristic_score(lead: LeadFeatures) -> float:

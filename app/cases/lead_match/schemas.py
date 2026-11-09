@@ -13,6 +13,11 @@ Dos componentes algorítmicos separados, cada uno con su propio módulo:
 
 from pydantic import BaseModel, Field, model_validator
 
+# Topes por pedido: el matching arma una matriz de leads x cupos de vendedores en memoria.
+MAX_LEADS = 1000
+MAX_REPS = 200
+MAX_MATCH_CELLS = 2_000_000
+
 
 class LeadFeatures(BaseModel):
     lead_id: str
@@ -33,8 +38,8 @@ class SalesRep(BaseModel):
 
 
 class MatchRequest(BaseModel):
-    leads: list[LeadFeatures] = Field(..., min_length=1)
-    reps: list[SalesRep] = Field(..., min_length=1)
+    leads: list[LeadFeatures] = Field(..., min_length=1, max_length=MAX_LEADS)
+    reps: list[SalesRep] = Field(..., min_length=1, max_length=MAX_REPS)
     specialty_bonus: float = Field(
         default=1.2,
         ge=1.0,
@@ -49,6 +54,14 @@ class MatchRequest(BaseModel):
         rep_ids = [r.rep_id for r in self.reps]
         if len(rep_ids) != len(set(rep_ids)):
             raise ValueError("rep_id duplicado en reps")
+        # Un vendedor nunca recibe más leads que los del pedido, así que la capacidad
+        # útil se recorta a esa cantidad (lo mismo hace matching.py).
+        slots = sum(min(r.capacity, len(self.leads)) for r in self.reps)
+        if len(self.leads) * slots > MAX_MATCH_CELLS:
+            raise ValueError(
+                f"Pedido demasiado grande: {len(self.leads)} leads x {slots} cupos supera el máximo "
+                f"de {MAX_MATCH_CELLS} combinaciones. Dividilo en pedidos más chicos."
+            )
         return self
 
 
@@ -77,5 +90,15 @@ class TrainRequest(BaseModel):
 
 class TrainResponse(BaseModel):
     status: str
-    version_id: str
+    version_id: str = Field(description="La versión recién entrenada, haya quedado vigente o no")
     metrics: dict
+    promoted: bool = Field(description="True si la versión entrenada quedó como vigente")
+    promotion_reason: str
+    current_version_id: str | None = Field(description="La versión que usa /match en este momento")
+
+
+class ModelVersion(BaseModel):
+    version_id: str
+    created_at: str
+    metrics: dict
+    is_current: bool

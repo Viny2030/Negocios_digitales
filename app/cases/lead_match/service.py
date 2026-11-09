@@ -32,7 +32,7 @@ def invalidate_scorer_cache(company_id: int) -> None:
 def match(company_id: int, request: MatchRequest) -> MatchResponse:
     scorer = _get_scorer_for_company(company_id)
 
-    conversion_probabilities = {lead.lead_id: scorer.predict_proba(lead) for lead in request.leads}
+    conversion_probabilities = scorer.predict_many(request.leads)
 
     assignments, unmatched = match_leads(
         leads=request.leads,

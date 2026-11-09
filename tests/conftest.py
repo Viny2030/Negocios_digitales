@@ -18,6 +18,10 @@ import tempfile
 os.environ.setdefault("DATABASE_URL", f"sqlite:///{tempfile.gettempdir()}/prescriptive_app_default.db")
 os.environ.setdefault("DATASETS_DIR", tempfile.mkdtemp())
 os.environ.setdefault("MODELS_DIR", tempfile.mkdtemp())
+# Cada test registra su propia empresa desde la misma IP: el límite real se prueba aparte
+# en test_security.py.
+os.environ.setdefault("REGISTRATION_RATE_LIMIT", "100000/hour")
+os.environ.setdefault("IP_RATE_LIMIT", "100000/minute")
 
 import uuid
 
@@ -27,11 +31,25 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.main import app
+from config import get_settings
 from database import Base, get_db
+from rate_limit import limiter
+
+
+@pytest.fixture(autouse=True)
+def _contadores_de_limites_limpios():
+    limiter.reset()
+    yield
+    limiter.reset()
 
 
 @pytest.fixture()
-def client():
+def client(monkeypatch, tmp_path):
+    # Cada test arranca con una base nueva y sus ids vuelven a empezar en 1. Sin carpetas
+    # propias, la empresa 1 de un test heredaría los modelos de la empresa 1 de otro.
+    monkeypatch.setattr(get_settings(), "MODELS_DIR", str(tmp_path / "models"))
+    monkeypatch.setattr(get_settings(), "DATASETS_DIR", str(tmp_path / "datasets"))
+
     db_path = tempfile.NamedTemporaryFile(suffix=".db", delete=False, dir=tempfile.gettempdir()).name
     engine = create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

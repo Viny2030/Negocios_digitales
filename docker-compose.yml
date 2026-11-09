@@ -10,7 +10,8 @@ services:
       - DATASETS_DIR=/app/storage/datasets
       - MODELS_DIR=/app/storage/models
     volumes:
-      - ./storage:/app/storage
+      # Volumen con nombre: hereda los permisos de la imagen, donde la app no corre como root.
+      - storage:/app/storage
     depends_on:
       - db
 
@@ -23,7 +24,9 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      # Solo desde esta máquina: la contraseña de arriba es de desarrollo.
+      - "127.0.0.1:5432:5432"
 
 volumes:
   pgdata:
+  storage:

@@ -1,0 +1,25 @@
+# Sin este archivo, `COPY . .` mete en la imagen secretos y datos locales.
+.env
+.env.*
+!.env.example
+*.db
+storage/
+synthetic_data/
+
+.git
+.github
+.idea
+.venv
+__pycache__/
+*.pyc
+.pytest_cache
+.ruff_cache
+.pre-commit-config.yaml
+
+tests/
+scripts/
+generate_synthetic_data.py
+Claude outputs/
+Dockerfile
+docker-compose.yml
+README.md
