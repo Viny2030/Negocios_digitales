@@ -2,9 +2,9 @@
 # Instalar con: pip install -r requirements.txt -r requirements-dev.txt
 -r requirements.txt
 
-pytest==9.0.*
-httpx==0.27.*
+pytest==9.2.*
+httpx==0.28.*
 # Dependencia de httpx; piso por GHSA-6q48-6c7w-9gw2.
 certifi>=2026.10.18
-ruff==0.6.9
-pre-commit==3.8.*
+ruff==0.17.4
+pre-commit==4.7.*
