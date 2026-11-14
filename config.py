@@ -41,6 +41,22 @@ class Settings(BaseSettings):
 
     CORS_ORIGINS: list[str] = ["*"]
 
+    # Topes de tamaño (bytes). El primero corre para archivos subidos; el segundo, para
+    # el resto de los cuerpos (JSON). Ver app/middleware.py.
+    MAX_UPLOAD_BYTES: int = 25 * 1024 * 1024
+    MAX_JSON_BODY_BYTES: int = 10 * 1024 * 1024
+
+    # Límites de pedidos (ver rate_limit.py). IP_RATE_LIMIT es el techo por IP sobre todo
+    # el tráfico, y evita que inventar una API key distinta en cada pedido saltee el límite.
+    IP_RATE_LIMIT: str = "600/minute"
+    DEFAULT_RATE_LIMIT: str = "120/minute"
+    REGISTRATION_RATE_LIMIT: str = "10/hour"
+
+    # Cuántos proxies propios hay delante de la API. 0 = expuesta directo (se usa la IP de
+    # la conexión). En un PaaS suele ser 1: se toma esa posición contando desde la derecha
+    # de X-Forwarded-For, porque lo que está a la izquierda lo puede escribir el cliente.
+    TRUSTED_PROXY_HOPS: int = 0
+
     # No hay cola de tareas ni broker: el scoring de LeadMatch entrena sincrónico en
     # el propio request de /train (ver app/cases/lead_match/train.py), y
     # DynamicPricing/SmartRoute son stateless por request, sin entrenamiento.

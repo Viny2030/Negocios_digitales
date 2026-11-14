@@ -115,7 +115,7 @@ def test_train_y_promote_deja_modelo_servible(tmp_path, monkeypatch):
         }
     ).to_csv(csv_path, index=False)
 
-    version_id, metrics = train_for_company(company_id=123, dataset_path=str(csv_path))
+    version_id, metrics, promoted, _reason = train_for_company(company_id=123, dataset_path=str(csv_path))
 
     assert version_id
     assert metrics["n_train"] > 0
@@ -200,6 +200,6 @@ def test_train_acepta_dataset_con_punto_y_coma(tmp_path, monkeypatch):
     path = tmp_path / "leads_excel.csv"
     path.write_text(src.replace(",", ";"), encoding="utf-8-sig")
 
-    version_id, metrics = train_mod.train_for_company(99, str(path))
+    version_id, metrics, _promoted, _reason = train_mod.train_for_company(99, str(path))
     assert metrics["n_train"] > 0
     assert mr.get_current_version_id(str(tmp_path / "models"), 99, "lead_match") == version_id

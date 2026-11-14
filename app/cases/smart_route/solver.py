@@ -3,7 +3,7 @@ VRPTW (Vehicle Routing Problem with Time Windows) resuelto con el algoritmo de
 ahorros de Clarke-Wright + una mejora local 2-opt, en vez de fuerza bruta (que
 explota factorialmente: con 15 paradas ya son ~1.3e12 permutaciones posibles).
 
-El proceso tiene 3 fases separadas, cada una con su propia responsabilidad:
+El proceso tiene 4 fases separadas, cada una con su propia responsabilidad:
 
   1. `_build_routes_by_savings`: arma las rutas por distancia y capacidad
      (Clarke-Wright clásico), ignorando ventanas horarias -- esa fase es sobre
@@ -17,12 +17,16 @@ El proceso tiene 3 fases separadas, cada una con su propia responsabilidad:
      parada por parada. Si una parada llega tarde a su ventana (o la ruta se
      pasa de `max_route_duration_min`), intenta un 2-opt acotado para
      reordenar sin violar ventanas; si ni así entra, saca la parada más
-     conflictiva de la ruta (queda en `unassigned_stops`) en vez de devolver
-     un horario que en la práctica es inviable.
+     conflictiva de la ruta en vez de devolver un horario inviable.
+  4. `_insert_unassigned`: las fases anteriores no conocen las ventanas al
+     armar las rutas, así que pueden dejar afuera paradas que sí entraban.
+     Acá cada parada suelta prueba todas las posiciones de todos los vehículos
+     (también los que quedaron libres) y va a la que menos distancia agrega.
+     Solo las que no entran en ninguno quedan en `unassigned_stops`.
 
-Esta separación en fases (en vez de meter todo en un solo loop) es lo que
-garantiza que la respuesta final SIEMPRE sea factible -- nunca se le devuelve
-al cliente una ruta que en el mundo real llegaría tarde a una entrega.
+La respuesta siempre cumple capacidad, ventanas y duración según este modelo, que
+usa distancia en línea recta y velocidad constante: sin calles ni tránsito, los
+tiempos reales serán mayores. Es una heurística: no garantiza el óptimo global.
 """
 
 import math
@@ -127,7 +131,7 @@ def _assign_routes_to_vehicles(
     Si sobran rutas sin vehículo disponible que las cubra, sus paradas quedan
     sin asignar en vez de forzar una asignación que exceda capacidad."""
     routes_sorted = sorted(routes, key=lambda r: r.demand, reverse=True)
-    vehicles_sorted = sorted(vehicles, key=lambda v: v.capacity, reverse=True)
+    vehicles_sorted = sorted(vehicles, key=lambda v: v.capacity)
 
     assigned: list[tuple[_Route, Vehicle]] = []
     unassigned_stop_ids: list[str] = []
@@ -183,6 +187,21 @@ def _route_distance_km(depot: GeoPoint, ordered_stops: list[Stop]) -> float:
     return total
 
 
+def _route_duration_min(depot: GeoPoint, schedule: list[dict], speed_kmh: float) -> float:
+    """Duración total de la ruta: hasta que el vehículo vuelve al depósito."""
+    if not schedule:
+        return 0.0
+    last = schedule[-1]
+    return last["departure_min"] + (haversine_km(last["stop"].location, depot) / speed_kmh) * 60
+
+
+def _is_feasible(depot: GeoPoint, ordered_stops: list[Stop], vehicle: Vehicle) -> bool:
+    schedule = _schedule(depot, ordered_stops, vehicle.average_speed_kmh)
+    if not all(row["on_time"] for row in schedule):
+        return False
+    return _route_duration_min(depot, schedule, vehicle.average_speed_kmh) <= vehicle.max_route_duration_min
+
+
 def _two_opt_improve(depot: GeoPoint, stops: list[Stop], speed_kmh: float) -> list[Stop]:
     """2-opt acotado: prueba invertir cada segmento [i:j] y se queda con la
     mejora si (a) reduce la distancia total Y (b) el horario resultante no
@@ -220,7 +239,7 @@ def _make_feasible(depot: GeoPoint, stops: list[Stop], vehicle: Vehicle) -> tupl
 
     while ordered:
         schedule = _schedule(depot, ordered, vehicle.average_speed_kmh)
-        total_duration = schedule[-1]["departure_min"] if schedule else 0.0
+        total_duration = _route_duration_min(depot, schedule, vehicle.average_speed_kmh)
         late_rows = [row for row in schedule if not row["on_time"]]
         over_duration = total_duration > vehicle.max_route_duration_min
 
@@ -238,18 +257,63 @@ def _make_feasible(depot: GeoPoint, stops: list[Stop], vehicle: Vehicle) -> tupl
     return ordered, dropped
 
 
+def _insert_unassigned(
+    depot: GeoPoint,
+    plans: dict[str, list[Stop]],
+    vehicles: list[Vehicle],
+    unassigned: list[Stop],
+) -> list[str]:
+    """Inserta cada parada suelta donde menos distancia agregue sin romper capacidad,
+    ventanas ni duración. Modifica `plans` y devuelve los ids que no entraron en ningún
+    vehículo. Primero van las de ventana más temprana, que tienen menos lugares posibles.
+    Los vehículos se recorren de menor a mayor capacidad: ante un empate, usa el más chico."""
+    vehicles_by_capacity = sorted(vehicles, key=lambda v: v.capacity)
+    remaining: list[str] = []
+
+    for stop in sorted(unassigned, key=lambda s: (s.time_window_end_min, s.stop_id)):
+        best: tuple[float, str, list[Stop]] | None = None
+        for vehicle in vehicles_by_capacity:
+            current = plans.get(vehicle.vehicle_id, [])
+            if sum(s.demand for s in current) + stop.demand > vehicle.capacity:
+                continue
+            current_distance = _route_distance_km(depot, current)
+            for position in range(len(current) + 1):
+                candidate = current[:position] + [stop] + current[position:]
+                if not _is_feasible(depot, candidate, vehicle):
+                    continue
+                added = _route_distance_km(depot, candidate) - current_distance
+                if best is None or added < best[0] - 1e-9:
+                    best = (added, vehicle.vehicle_id, candidate)
+
+        if best is None:
+            remaining.append(stop.stop_id)
+        else:
+            plans[best[1]] = best[2]
+
+    return remaining
+
+
 def solve(request: RoutingRequest) -> RoutingResponse:
     max_capacity = max(v.capacity for v in request.vehicles)
     raw_routes = _build_routes_by_savings(request.depot, request.stops, max_capacity)
-    assigned, unassigned = _assign_routes_to_vehicles(raw_routes, request.vehicles)
+    assigned, unassigned_ids = _assign_routes_to_vehicles(raw_routes, request.vehicles)
 
-    final_routes: list[VehicleRoute] = []
+    plans: dict[str, list[Stop]] = {}
     for route, vehicle in assigned:
         feasible_stops, dropped = _make_feasible(request.depot, route.stops, vehicle)
-        unassigned.extend(dropped)
-        if not feasible_stops:
-            continue
+        unassigned_ids.extend(dropped)
+        if feasible_stops:
+            plans[vehicle.vehicle_id] = feasible_stops
 
+    stops_by_id = {s.stop_id: s for s in request.stops}
+    remaining = _insert_unassigned(
+        request.depot, plans, request.vehicles, [stops_by_id[stop_id] for stop_id in unassigned_ids]
+    )
+
+    vehicles_by_id = {v.vehicle_id: v for v in request.vehicles}
+    final_routes: list[VehicleRoute] = []
+    for vehicle_id, feasible_stops in plans.items():
+        vehicle = vehicles_by_id[vehicle_id]
         schedule = _schedule(request.depot, feasible_stops, vehicle.average_speed_kmh)
         route_stops = [
             RouteStop(
@@ -265,10 +329,12 @@ def solve(request: RoutingRequest) -> RoutingResponse:
                 vehicle_id=vehicle.vehicle_id,
                 stops=route_stops,
                 total_distance_km=round(_route_distance_km(request.depot, feasible_stops), 3),
-                total_duration_min=round(schedule[-1]["departure_min"], 2) if schedule else 0.0,
+                total_duration_min=round(
+                    _route_duration_min(request.depot, schedule, vehicle.average_speed_kmh), 2
+                ),
                 load_used=sum(s.demand for s in feasible_stops),
                 capacity=vehicle.capacity,
             )
         )
 
-    return RoutingResponse(routes=final_routes, unassigned_stops=sorted(set(unassigned)))
+    return RoutingResponse(routes=final_routes, unassigned_stops=sorted(remaining))

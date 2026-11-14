@@ -11,12 +11,17 @@ propios datos, aislada del resto de las empresas en la misma plataforma.
 > referencias a `case1`..`case4` en un fork o una copia vieja del código, son de la
 > versión anterior.
 
+**Manual de uso, con grafos de funcionamiento y de información:** con la API corriendo,
+en `/manual` (español) y `/manual/en` (inglés). Se generan con
+`python -m scripts.generar_manual`; si cambia el comportamiento de la API, hay que
+actualizar ese script, incluida su sección de limitaciones.
+
 ## Productos
 
 | Producto | Endpoint principal | Algoritmo | ¿Entrena algo? |
 |---|---|---|---|
 | **DynamicPricing API** | `POST /api/v1/dynamic-pricing/price` | Regresión log-log (elasticidad precio-demanda) + `scipy.optimize.minimize_scalar` para el precio que maximiza margen o volumen, con margen mínimo y variación diaria máxima como restricciones | No — stateless por request |
-| **SmartRoute Fleet** | `POST /api/v1/smart-route/plan-routes` | VRPTW: heurística de ahorros de Clarke-Wright + mejora local 2-opt, con asignación de vehículos por capacidad y reparación de factibilidad de ventanas horarias | No — stateless por request |
+| **SmartRoute Fleet** | `POST /api/v1/smart-route/plan-routes` | VRPTW: heurística de ahorros de Clarke-Wright + mejora local 2-opt, con asignación de vehículos por capacidad, reparación de factibilidad de ventanas horarias y reinserción de las paradas descartadas | No — stateless por request |
 | **LeadMatch Engine** | `POST /api/v1/lead-match/match` (+ `POST /api/v1/lead-match/train`) | Regresión logística (`scikit-learn`) para probabilidad de conversión + algoritmo húngaro (`scipy.optimize.linear_sum_assignment`) para la asignación óptima lead-vendedor respetando capacidad | Sí — un clasificador por empresa, entrenado sincrónico (segundos) a partir de un dataset subido |
 
 DynamicPricing y SmartRoute resuelven un problema de optimización distinto en cada
@@ -45,15 +50,21 @@ Además cada uno tiene sus propios módulos de dominio:
 
 ## Multi-tenant: empresas y datasets
 
-1. La empresa se registra: `POST /api/v1/companies` → recibe un `api_key`.
+1. La empresa se registra: `POST /api/v1/companies` → recibe un `api_key`, que **se
+   muestra solo en esa respuesta** porque la base guarda únicamente su hash. Si se
+   pierde o se filtra, se reemplaza con `POST /api/v1/companies/me/rotate-key` (hace
+   falta la key vigente; la anterior deja de funcionar en el momento).
 2. Todos los endpoints de negocio requieren el header `X-API-Key`.
 3. Solo LeadMatch usa datasets: la empresa sube su histórico de leads (CSV) por
    `POST /api/v1/datasets/lead_match`.
 4. Dispara el entrenamiento: `POST /api/v1/lead-match/train` con el `dataset_id`
    (corre sincrónico, responde en la misma request — no hace falta cola de tareas).
-5. El modelo se guarda versionado en `storage/models/<company_id>/lead_match/versions/`
-   con un puntero `current.json`; desde ese momento `/lead-match/match` lo usa
-   automáticamente para esa empresa (antes, usa la heurística).
+5. El modelo se guarda versionado en `storage/models/<company_id>/lead_match/versions/`.
+   Solo pasa a ser el vigente (puntero `current.json`, el que usa `/lead-match/match`) si
+   su AUC llega a 0,55 y no es peor que el del modelo actual medido sobre las mismas filas:
+   la respuesta lo indica en `promoted` y `promotion_reason`. Mientras no haya uno
+   vigente, se usa la heurística. `GET /api/v1/lead-match/models` lista las versiones y
+   `POST /api/v1/lead-match/models/{version_id}/promote` deja vigente cualquiera de ellas.
 
 Esto significa que **no hace falta un repo por empresa**: es una sola plataforma,
 aislada por `company_id` tanto en datos (`storage/datasets/<company_id>/...`) como en
@@ -131,6 +142,7 @@ config.py, database.py, security.py   # config, DB (SQLAlchemy), autenticación 
 model_registry.py                      # versionado de modelos (usado hoy solo por lead_match)
 rate_limit.py                          # rate limiting por API key (slowapi)
 app/
+  middleware.py  # tope de tamaño del cuerpo de cada pedido
   models/        # ORM: Company, Dataset
   schemas/       # Pydantic compartidos (CompanyCreate/Out, DatasetOut)
   services/      # dataset_ingestion.py: guardado/hash/activación de datasets
@@ -209,8 +221,15 @@ alembic downgrade -1
 > **Base creada por `uvicorn` antes de usar Alembic:** si `prescriptive.db` (o el
 > Postgres) ya tiene las tablas porque las creó `init_db()`, `alembic upgrade head`
 > falla con "table already exists" -- esa base no tiene la tabla `alembic_version`.
-> Marcala una sola vez como al día con `alembic stamp head` y desde ahí usá
-> `upgrade` normalmente.
+> Marcala una sola vez con la revisión que corresponde a su esquema y desde ahí usá
+> `upgrade` normalmente. Si `companies` todavía tiene la columna `api_key`, es
+> `alembic stamp 8324e3a86121` seguido de `alembic upgrade head`; si ya tiene
+> `api_key_hash`, es `alembic stamp head`.
+
+> **Antes de desplegar esta versión sobre una base existente:** corré `alembic upgrade
+> head`. `init_db()` no altera tablas, y sin la migración la autenticación falla. Las
+> keys ya emitidas siguen funcionando. Esta migración no tiene vuelta atrás, porque una
+> key no se puede recuperar a partir de su hash: hacé un backup antes.
 
 `alembic/env.py` ya está cableado a `settings.DATABASE_URL` (mismo `.env` que usa la
 API), así que no hace falta tocar `alembic.ini` para apuntar a otra base.
@@ -331,10 +350,29 @@ si el `fetch` falla por CORS al abrirlo con `file://`), pegar un API key y tocar
 - **LeadMatch**: exportaciones de CRM (HubSpot/Salesforce) con origen del lead, tiempo
   en sitio y resultado de conversión.
 
+## Límites y seguridad
+
+| Control | Valor | Si se supera |
+|---|---|---|
+| Pedidos por empresa | 120 por minuto (`/train`: 5; carga de datasets: 10) | 429 |
+| Pedidos por IP, en total | 600 por minuto (`IP_RATE_LIMIT`) | 429 |
+| Altas de empresa por IP | 10 por hora (`REGISTRATION_RATE_LIMIT`) | 429 |
+| Rotaciones de key por IP | 10 por hora | 429 |
+| Archivo subido | 25 MB (`MAX_UPLOAD_BYTES`) | 413 |
+| Cuerpo JSON | 10 MB (`MAX_JSON_BODY_BYTES`) | 413 |
+| DynamicPricing | 500 SKU; 5.000 eventos de compra por SKU | 422 |
+| SmartRoute | 100 paradas y 100 vehículos | 422 |
+| LeadMatch | 1.000 leads, 200 vendedores, 2.000.000 de combinaciones lead x cupo | 422 |
+
+**Detrás de un proxy o PaaS hay que configurar `TRUSTED_PROXY_HOPS`** (ver
+`.env.example`). Con el valor por defecto (0), todos los clientes parecen venir de la IP
+del proxy y comparten los límites por IP.
+
 ## Qué falta para producción
 
-- **Autenticación más robusta para empresas**: hoy un `api_key` es válido
-  indefinidamente hasta que se marque `is_active=False` a mano — no hay rotación.
+- **Autenticación más robusta para empresas**: el alta es abierta (sin verificar el
+  email) y responde 409 si el email ya existe, lo que permite averiguar quién está
+  registrado. Una key no vence hasta que se rote o se marque `is_active=False` a mano.
 - **Panel/frontend real para clientes**: `dashboard.html` es un panel de pruebas
   técnico para desarrollo/QA, no una UI pensada para que una empresa cliente use día a
   día.

@@ -43,8 +43,10 @@ class Vehicle(BaseModel):
 
 class RoutingRequest(BaseModel):
     depot: GeoPoint
-    stops: list[Stop] = Field(..., min_length=1)
-    vehicles: list[Vehicle] = Field(..., min_length=1)
+    # El solver corre dentro del pedido: con 100 paradas tarda hasta unos 4 s, y con 200
+    # en una sola ruta, más de 60 s. Si se acelera el 2-opt, este tope se puede subir.
+    stops: list[Stop] = Field(..., min_length=1, max_length=100)
+    vehicles: list[Vehicle] = Field(..., min_length=1, max_length=100)
 
     @model_validator(mode="after")
     def _ids_unicos(self) -> "RoutingRequest":
@@ -68,7 +70,7 @@ class VehicleRoute(BaseModel):
     vehicle_id: str
     stops: list[RouteStop]
     total_distance_km: float
-    total_duration_min: float
+    total_duration_min: float = Field(description="Minutos hasta volver al depósito")
     load_used: float
     capacity: float
 

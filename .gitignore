@@ -18,3 +18,8 @@ storage/models/*
 .ruff_cache/
 .pytest_cache/
 *.egg-info/
+
+# Archivos locales del IDE y de trabajo
+.idea/
+Claude outputs/
+repomix-*.xml

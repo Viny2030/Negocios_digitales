@@ -81,8 +81,12 @@ def promote(models_dir: str, company_id: int, case: str, version_id: str) -> Non
     pointer = {"version_id": version_id, "promoted_at": dt.datetime.now(dt.UTC).isoformat()}
     case_dir = _case_dir(models_dir, company_id, case)
     os.makedirs(case_dir, exist_ok=True)
-    with open(_current_pointer_path(models_dir, company_id, case), "w", encoding="utf-8") as f:
+    # Se escribe aparte y se reemplaza de una vez: otro proceso nunca lee un puntero a medias.
+    pointer_path = _current_pointer_path(models_dir, company_id, case)
+    tmp_path = f"{pointer_path}.tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
         json.dump(pointer, f, indent=2)
+    os.replace(tmp_path, pointer_path)
 
 
 def get_current_version_id(models_dir: str, company_id: int, case: str) -> str | None:

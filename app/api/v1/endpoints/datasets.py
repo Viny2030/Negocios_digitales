@@ -22,6 +22,7 @@ from app.models.dataset import CaseType, Dataset
 from app.schemas.common import DatasetOut
 from app.services.dataset_ingestion import (
     DatasetSchemaError,
+    DatasetTooLargeError,
     activate_dataset,
     ingest_dataset,
     read_dataset_csv,
@@ -73,6 +74,8 @@ def upload_dataset(
 
     try:
         dataset, _created = ingest_dataset(db, company.id, case, file.filename, file.file, activate=True)
+    except DatasetTooLargeError as exc:
+        raise HTTPException(status_code=413, detail=str(exc)) from exc
     except DatasetSchemaError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
@@ -101,6 +104,8 @@ def replace_dataset_endpoint(
     dataset = _get_owned_dataset(db, company, case, dataset_id)
     try:
         dataset = replace_dataset(db, dataset, file.filename, file.file, activate=True)
+    except DatasetTooLargeError as exc:
+        raise HTTPException(status_code=413, detail=str(exc)) from exc
     except DatasetSchemaError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:

@@ -4,22 +4,25 @@ Ejecutar en desarrollo con:  uvicorn app.main:app --reload
 """
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from slowapi.middleware import SlowAPIMiddleware
 
 import logging_config  # noqa: F401  (configura logging por su efecto secundario, ver el módulo)
 from app.api.v1.router import api_router
+from app.middleware import BodySizeLimitMiddleware
 from config import get_settings
 from database import init_db
-from rate_limit import limiter
+from rate_limit import GlobalRateLimitMiddleware, limiter
 
 settings = get_settings()
+
+_STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 
 @asynccontextmanager
@@ -35,7 +38,7 @@ app = FastAPI(
         "(fijación dinámica de precios con restricciones de margen/variación), SmartRoute "
         "Fleet (ruteo y despacho last-mile) y LeadMatch Engine (scoring y asignación de "
         "leads a vendedores). Multi-empresa: cada empresa cliente tiene su propio API key, "
-        "aislado del resto."
+        "aislado del resto. Manual: [español](/manual) | [English](/manual/en)."
     ),
     version="0.1.0",
     lifespan=lifespan,
@@ -117,17 +120,41 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Rate limiting por empresa (ver rate_limit.py). El límite global (120/minuto por API key)
-# se aplica acá vía middleware; algunos endpoints pesados tienen además un límite más
-# estricto explícito en su propio router (ej. /train, carga de datasets).
+# Rate limiting (ver rate_limit.py). El techo por IP y el límite por defecto se aplican acá
+# vía middleware; algunos endpoints pesados tienen además un límite más estricto explícito
+# en su propio router (ej. /train, carga de datasets).
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-app.add_middleware(SlowAPIMiddleware)
+
+# Los middlewares agregados al final corren primero: límites de pedidos, tope de tamaño y
+# recién después el resto.
+app.add_middleware(BodySizeLimitMiddleware)
+app.add_middleware(GlobalRateLimitMiddleware)
 
 
 @app.get("/health", tags=["health"])
 def health():
     return {"status": "ok", "project": settings.PROJECT_NAME}
+
+
+@app.get("/", include_in_schema=False)
+def root() -> RedirectResponse:
+    return RedirectResponse("/manual")
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon() -> Response:
+    return Response(status_code=204)
+
+
+@app.get("/manual", include_in_schema=False)
+def manual() -> FileResponse:
+    return FileResponse(_STATIC_DIR / "manual.html", media_type="text/html")
+
+
+@app.get("/manual/en", include_in_schema=False)
+def manual_en() -> FileResponse:
+    return FileResponse(_STATIC_DIR / "manual_en.html", media_type="text/html")
 
 
 app.include_router(api_router)

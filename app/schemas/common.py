@@ -2,13 +2,13 @@
 
 import datetime as dt
 
-from pydantic import BaseModel, ConfigDict, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from app.models.dataset import CaseType, DatasetStatus
 
 
 class CompanyCreate(BaseModel):
-    name: str
+    name: str = Field(..., min_length=1, max_length=255)
     contact_email: EmailStr
 
 
@@ -18,9 +18,15 @@ class CompanyOut(BaseModel):
     id: int
     name: str
     contact_email: EmailStr
-    api_key: str
+    api_key_prefix: str = Field(description="Primeros caracteres de la API key, para identificarla")
     is_active: bool
     created_at: dt.datetime
+
+
+class CompanyWithApiKey(CompanyOut):
+    """Solo al registrarse o rotar la key: es la única vez que se muestra en claro."""
+
+    api_key: str
 
 
 class DatasetOut(BaseModel):
