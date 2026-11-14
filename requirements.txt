@@ -11,7 +11,7 @@ alembic==1.13.*
 # Dependencia de Alembic; piso por GHSA-5639-2j2p-m4mx.
 mako>=1.4.2
 python-multipart==0.0.33
-pandas==2.2.*
+pandas==3.1.*
 numpy==1.26.*
 scikit-learn==1.5.*
 scipy==1.13.*
