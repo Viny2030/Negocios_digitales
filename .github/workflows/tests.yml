@@ -1,33 +1,95 @@
-name: Tests
+@'
+name: CI
 
 on:
   push:
-    branches: ["**"]
+    branches: [main]
   pull_request:
-    branches: ["**"]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
-  pytest:
+  tests:
+    name: ruff + pytest (py${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.11 = imagen de produccion (Dockerfile); 3.12 = entorno local de desarrollo.
+        python-version: ["3.11", "3.12"]
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
-          # Misma versión que el Dockerfile de producción (python:3.11-slim) y que
-          # pyproject.toml (target-version="py311") -- antes este workflow corría en
-          # 3.12 mientras el contenedor real corre 3.11, así que código que pasaba
-          # CI/lint podía usar sintaxis 3.12-only y romper recién en producción.
-          python-version: "3.11"
-          cache: "pip"
-
-      - name: Instalar dependencias (prod + dev)
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+      - name: Instalar dependencias
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt -r requirements-dev.txt
-
+          pip install -r requirements-dev.txt
       - name: Lint (ruff)
         run: ruff check .
-
-      - name: Correr tests
+      - name: Tests (SQLite, igual que en local)
         run: python -m pytest tests/ -q
+
+  migrations:
+    name: Alembic + humo sobre PostgreSQL 16
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: prescriptive
+          POSTGRES_PASSWORD: prescriptive
+          POSTGRES_DB: prescriptive_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1 -U prescriptive -d prescriptive_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://prescriptive:prescriptive@localhost:5432/prescriptive_ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+      - name: Migraciones desde cero
+        run: alembic upgrade head
+      - name: Modelos ORM y migraciones coinciden
+        run: alembic check
+      - name: Humo de la app real contra Postgres
+        run: |
+          python - <<'PY'
+          from fastapi.testclient import TestClient
+          from app.main import app
+
+          with TestClient(app) as c:
+              r = c.post("/api/v1/companies", json={"name": "CI", "contact_email": "ci@empresa.com"})
+              assert r.status_code == 201, r.text
+              h = {"X-API-Key": r.json()["api_key"]}
+              assert c.get("/api/v1/companies/me", headers=h).status_code == 200
+              csv = b"lead_id,origin,time_on_site_minutes,company_size,rep_id,converted\n1,ads,5,10,r1,1\n"
+              up = c.post("/api/v1/datasets/lead_match", headers=h, files={"file": ("ci.csv", csv, "text/csv")})
+              assert up.status_code < 300, up.text
+              assert len(c.get("/api/v1/datasets/lead_match", headers=h).json()) == 1
+          PY
+'@ | Set-Content -Encoding ascii .github/workflows/tests.yml
