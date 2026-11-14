@@ -1,4 +1,3 @@
-@'
 name: CI
 
 on:
@@ -92,4 +91,3 @@ jobs:
               assert up.status_code < 300, up.text
               assert len(c.get("/api/v1/datasets/lead_match", headers=h).json()) == 1
           PY
-'@ | Set-Content -Encoding ascii .github/workflows/tests.yml

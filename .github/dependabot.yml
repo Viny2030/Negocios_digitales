@@ -1,4 +1,3 @@
-@'
 version: 2
 updates:
   - package-ecosystem: pip
@@ -29,4 +28,3 @@ updates:
     directory: "/"
     schedule:
       interval: monthly
-'@ | Set-Content -Encoding ascii .github/dependabot.yml
